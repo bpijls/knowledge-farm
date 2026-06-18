@@ -1,0 +1,24 @@
+# Environment files — never commit secrets
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Test tooling — throwaway venv, not application code
+test-env/
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo

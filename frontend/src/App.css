@@ -1,0 +1,367 @@
+/* ── Knowledge Farm: a daylight seed-vault / concept cultivator ──
+   Palette is pushed green/cool to stay clear of the warm-cream serif look.
+   Botany lives in colour, the depth spectrum, type and voice — never clip-art. */
+:root {
+  --field: #eef1e6; /* app ground — pale meadow haze */
+  --canvas: #e8eedd; /* graph chamber — open field */
+  --paper: #fbfcf7; /* panel surface — specimen card */
+  --well: #eef2e6; /* inset input — turned soil */
+  --rule: #cdd6bc; /* hairlines — dry grass */
+  --ink: #22281c; /* primary text — moss ink */
+  --stem: #5c6b4e; /* labels / captions — sage */
+  --seed: #e0922a; /* the "planted" accent — sun amber */
+  --seed-deep: #b5701a; /* amber edge */
+  --sky: #2e7fb0; /* interactive + lineage — open sky */
+  --bloom: #8b3fb0; /* deep-growth violet (legend) */
+
+  --display: "Bricolage Grotesque", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--field);
+  color: var(--ink);
+  font-family: var(--body);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+}
+
+/* ── Sidebar: the cultivation console ── */
+.sidebar {
+  width: 312px;
+  flex-shrink: 0;
+  background: var(--paper);
+  border-right: 1px solid var(--rule);
+  padding: 26px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.85rem;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.subtitle {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--stem);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ── Form ── */
+.concept-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--stem);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.field textarea,
+.field input[type="number"] {
+  background: var(--well);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink);
+  font-family: var(--body);
+  padding: 9px 11px;
+  font-size: 0.9rem;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.field textarea::placeholder {
+  color: #a9b39a;
+}
+
+.field textarea:focus,
+.field input[type="number"]:focus {
+  border-color: var(--sky);
+  box-shadow: 0 0 0 3px rgba(46, 127, 176, 0.15);
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.field-row .field {
+  flex: 1;
+}
+
+.generate-btn {
+  background: var(--seed);
+  color: #2a1d08;
+  border: none;
+  border-radius: 4px;
+  padding: 12px 0;
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.generate-btn:hover:not(:disabled) {
+  background: #efa53e;
+}
+
+.generate-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.generate-btn:disabled {
+  background: var(--rule);
+  color: #8b9579;
+  cursor: not-allowed;
+}
+
+.status {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  color: var(--stem);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--stem);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input,
+.temp-slider {
+  accent-color: var(--sky);
+  cursor: pointer;
+}
+
+.temp-value {
+  font-family: var(--mono);
+  color: var(--seed-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.temp-slider {
+  width: 100%;
+}
+
+.temp-hints {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9aa589;
+  margin-top: 3px;
+}
+
+/* ── Trace-to-seed panel ── */
+.path-panel {
+  margin-top: 4px;
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+}
+
+.path-title {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--sky);
+}
+
+.path-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.88rem;
+  color: var(--stem);
+}
+
+/* A growing stem: each step links down to the next via a left rule + node dot. */
+.path-list li {
+  position: relative;
+  padding: 3px 0 3px 18px;
+  line-height: 1.3;
+}
+
+.path-list li::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 11px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--stem);
+}
+
+.path-list li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 17px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--rule);
+}
+
+.path-list li.path-selected {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.path-list li.path-selected::before {
+  background: var(--sky);
+}
+
+.path-list li.path-root {
+  color: var(--seed-deep);
+  font-weight: 600;
+}
+
+.path-list li.path-root::before {
+  background: var(--seed);
+  box-shadow: 0 0 0 2px rgba(224, 146, 42, 0.25);
+}
+
+.error {
+  background: #fbeee8;
+  border: 1px solid #e3b9a6;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: #a4522e;
+}
+
+/* ── Main graph area ── */
+.main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+.graph-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--stem);
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  letter-spacing: 0.03em;
+}
+
+/* ── Floating controls ── */
+.fit-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 8px 15px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stem);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.fit-btn:hover {
+  border-color: var(--seed);
+  color: var(--ink);
+}
+
+/* ── Growth-stage key ── */
+.legend {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 9px 14px;
+  display: flex;
+  gap: 16px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--stem);
+}
+
+.legend-seed { color: var(--seed-deep); }
+.legend-d1   { color: hsl(95, 62%, 38%); }
+.legend-d2   { color: var(--bloom); }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

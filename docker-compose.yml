@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - internal
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    volumes:
+      - ./frontend:/app
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - internal
+      - caddy_proxy
+    labels:
+      caddy: ${APP_DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 5173}}"
+      caddy_docker_network: ${CADDY_NETWORK}
+
+networks:
+  internal:
+  caddy_proxy:
+    external: true
+    name: ${CADDY_NETWORK}
