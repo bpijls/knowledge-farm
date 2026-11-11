@@ -1,0 +1,84 @@
+# Production (knowledge-farm.feib.nl): the built frontend behind nginx, the API and worker
+# without hot reload, nothing mounted from the source tree. Use it instead of
+# docker-compose.yml, not on top of it:
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Only the frontend joins the Caddy network; the API is reachable through nginx's /api proxy
+# alone, so API_DOMAIN is not used here. VONK_BASE_URL must be vonk's Tailscale address:
+# containers on feib.nl cannot resolve the name `vonk`.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: knowledge-farm-api
+    build:
+      context: ./backend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - gen_images:/data/gen
+    healthcheck:   # the worker waits for this: the API creates the tables on startup
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      default:
+        aliases: [knowledge-farm-api]   # the name nginx/default.conf proxies to
+
+  # Runs report jobs. Same image as the api. A rollout restarts it, which fails the job that
+  # was running; it can be started again from the page.
+  worker:
+    image: knowledge-farm-api
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    volumes:
+      - gen_images:/data/gen
+
+  frontend:
+    image: knowledge-farm-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    depends_on: [api]
+    restart: unless-stopped
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [default, caddy_proxy]
+    labels:
+      caddy: ${APP_DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 80}}"
+      caddy_docker_network: ${CADDY_NETWORK}
+
+volumes:
+  postgres_data:
+  gen_images:
+
+networks:
+  caddy_proxy:
+    external: true
+    name: ${CADDY_NETWORK}

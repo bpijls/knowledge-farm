@@ -107,6 +107,27 @@ frontend/src/
 `source_node_ids` on each section drive the provenance highlight: hovering a section highlights
 those nodes in the graph; clicking a node scrolls to the section that grew from it.
 
+## Production (feib.nl)
+
+Live at **https://knowledge-farm.feib.nl**: host `feib.nl` (ssh, user bpijls), checkout in
+`~/knowledge-farm`, pulled from GitHub. It runs `docker-compose.prod.yml`: frontend built by
+`frontend/Dockerfile.prod` and served by nginx (`nginx/default.conf`, which proxies `/api/` to
+`knowledge-farm-api:8000` with buffering off for the SSE stream), api and worker without hot
+reload or source mounts.
+
+```bash
+ssh feib.nl 'cd ~/knowledge-farm && git pull --ff-only && docker compose -f docker-compose.prod.yml up -d --build'
+```
+
+The server's `.env` is not in git. It differs from development in `APP_DOMAIN`
+(knowledge-farm.feib.nl), `DB_PASSWORD`, `VONK_BASE_URL` (vonk's Tailscale address,
+`http://100.67.143.38:4000/v1`: containers there cannot resolve `vonk`) and
+`MAX_CONCURRENT_JOBS=1` / `GRAPH_CONCURRENCY=4` (2 CPUs, 3 GB, shared with other sites).
+A changed `.env` needs `up -d --force-recreate`. A rollout restarts the worker, which fails a
+running report job; it can be grown again.
+
+**There is no login.** Anyone who finds the URL can grow graphs and reports on vonk.
+
 ## Key constraints
 
 - **The normalised key is the contract between front and back.** Node ids are
