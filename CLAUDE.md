@@ -123,6 +123,8 @@ The server's `.env` is not in git. It differs from development in `APP_DOMAIN`
 (knowledge-farm.feib.nl), `DB_PASSWORD`, `VONK_BASE_URL` (vonk's Tailscale address,
 `http://100.67.143.38:4000/v1`: containers there cannot resolve `vonk`) and
 `MAX_CONCURRENT_JOBS=1` / `GRAPH_CONCURRENCY=4` (2 CPUs, 3 GB, shared with other sites).
+It also uses `VONK_IMAGE_MODEL=image`: the vonk key on feib.nl may only use `text`, `code`,
+`embedding` and `image`, so `image-fast` returns 403 there. A report takes ~4.5 min instead of ~1.5.
 A changed `.env` needs `up -d --force-recreate`. A rollout restarts the worker, which fails a
 running report job; it can be grown again.
 
