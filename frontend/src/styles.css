@@ -17,6 +17,11 @@
   --display: "Bricolage Grotesque", system-ui, sans-serif;
   --body: "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Names the template's JobsPanel styles use. */
+  --muted: var(--stem);
+  --border: var(--rule);
+  --accent: var(--sky);
 }
 
 * {
@@ -360,8 +365,291 @@ body {
 .legend-d1   { color: hsl(95, 62%, 38%); }
 .legend-d2   { color: var(--bloom); }
 
+/* ── Harvest: growing a report ── */
+.harvest {
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+}
+
+.harvest-row {
+  display: flex;
+  gap: 8px;
+}
+
+.harvest-row select {
+  background: var(--well);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 0.85rem;
+  padding: 0 8px;
+}
+
+.harvest-btn {
+  flex: 1;
+  background: var(--sky);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 0;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.harvest-btn:hover:not(:disabled) { background: #2a6f9a; }
+
+.harvest-btn:disabled {
+  background: var(--rule);
+  color: #8b9579;
+  cursor: progress;
+}
+
+/* ── Saved graphs and jobs (collapsed by default) ── */
+.saved {
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+  font-size: 0.85rem;
+}
+
+.saved summary {
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--stem);
+}
+
+.saved ul {
+  list-style: none;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.saved li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.saved li.current .link { font-weight: 600; color: var(--ink); }
+
+.saved-meta {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: #9aa589;
+}
+
+button.link {
+  background: none;
+  border: none;
+  padding: 2px 0;
+  color: var(--sky);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved .jobs { margin: 8px 0 0; }
+.saved .jobs h2 { display: none; }
+.saved .job-toggle { border: none; cursor: pointer; }
+.saved button.quiet { border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+
+.job-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.job-bar > div { height: 100%; background: var(--accent); transition: width 0.3s; }
+.job-head { display: flex; align-items: center; gap: 0.5rem; }
+.job-toggle { flex: 1; display: flex; align-items: center; gap: 0.6rem; padding: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.job-kind { flex: 1; }
+.job-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.job-status { padding: 0.05rem 0.45rem; border: 1px solid var(--border); border-radius: 999px; font-size: 0.72rem; color: var(--muted); }
+.job-status-running { border-color: var(--accent); color: var(--accent); }
+.job-status-done { border-color: #3d8a5f; color: #3d8a5f; }
+.job-status-failed { border-color: #b4442e; color: #b4442e; }
+.job-progress { margin-top: 0.3rem; font-size: 0.8rem; color: var(--muted); }
+.job-log {
+  max-height: 12rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: 0.72rem/1.5 var(--mono);
+  white-space: pre-wrap;
+}
+
+/* ── The report ── */
+.report {
+  width: min(46vw, 640px);
+  flex-shrink: 0;
+  background: var(--paper);
+  border-left: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.report-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px 28px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.report-kicker {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--seed-deep);
+}
+
+.report-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.9rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
+}
+
+.report-actions { display: flex; gap: 6px; }
+
+.quiet-btn {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--stem);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.quiet-btn:hover { border-color: var(--seed); color: var(--ink); }
+
+.report-progress {
+  padding: 12px 28px 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--stem);
+}
+
+.report-progress p { margin-top: 6px; }
+.report > .error { margin: 12px 28px 0; }
+
+.report-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 28px 48px;
+  font-size: 0.98rem;
+  line-height: 1.62;
+}
+
+.report-section {
+  margin: 0 -14px;
+  padding: 14px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  animation: sprout 0.6s ease-out;
+}
+
+.report-section.active { background: #eef4f8; border-left-color: var(--sky); }
+.report-section.pinned { border-left-color: var(--seed); }
+
+.report-section h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  margin-bottom: 6px;
+}
+
+.report-section p + p { margin-top: 0.8em; }
+
+.report-section figure.gen {
+  margin: 14px 0;
+}
+
+.report-section figure.gen img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--canvas);
+}
+
+.report-section figure.gen figcaption {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--stem);
+}
+
+/* Not drawn yet: a soft pulsing field instead of a broken image. */
+.report-section figure.gen.pending img {
+  visibility: hidden;
+}
+
+.report-section figure.gen.pending {
+  position: relative;
+  border-radius: 6px;
+  background: linear-gradient(110deg, var(--canvas) 30%, #dfe8cf 50%, var(--canvas) 70%);
+  background-size: 200% 100%;
+  animation: ripen 1.6s linear infinite;
+}
+
+.report-section figure.gen.pending figcaption { padding: 0 8px 6px; }
+
+.report-growing {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--stem);
+}
+
+@keyframes sprout {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ripen {
+  to { background-position: -200% 0; }
+}
+
+/* ── Narrow screens: sidebar, graph and report stack and the page scrolls ── */
+@media (max-width: 900px) {
+  body { height: auto; overflow: auto; }
+  .app { flex-direction: column; height: auto; }
+  .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--rule); padding: 20px 16px; }
+  .main { height: 70vh; flex: none; }
+  .report { width: auto; border-left: none; border-top: 1px solid var(--rule); overflow: visible; }
+  .report-head, .report-progress, .report-body { padding-left: 16px; padding-right: 16px; }
+  .report-body { overflow: visible; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+    animation: none !important;
   }
 }

@@ -4,51 +4,122 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Recursive concept-graph generator. Seed concepts are expanded by an LLM into related ideas over N iterations; the result is explored as an interactive force-directed graph. Cross-branch deduplication makes the output a graph, not a tree.
+Grow a concept graph from one word, then grow an illustrated report from that graph. Seeds are
+expanded by an LLM into related concepts over N iterations and streamed to the browser, so the
+graph visibly grows. A background job then writes a report whose sections are the seed's
+strongest branches, with images drawn by vonk's `image-fast` model.
 
 ```
-frontend (Vite+React, :5173) ──SSE──▶ backend (FastAPI, :8000) ──▶ LLM proxy (vonk, :4000, OpenAI-compatible)
+frontend (Vite+React, :3000) ──SSE /api/graphs/stream──▶ api (FastAPI, :8000) ──▶ vonk (chat)
+          │                                                    │ saves the graph
+          └── POST /api/graphs/{id}/reports ──▶ jobs row ──▶ worker: grow_report ──▶ vonk (chat, image-fast)
+                    polls /api/reports/{id} ◀── reports row (sections appear one by one) + gen_images volume
 ```
 
-## Commands
+## Running the stack
 
-Backend (`backend/`):
+`./setup.sh` creates `.env` from `.env.example`, checks the required values and the Caddy
+network, then brings the stack up. Or:
+
 ```bash
-uv venv .venv && source .venv/bin/activate
-uv pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+docker compose up -d --build     # first run / after dependency changes
+docker compose up -d --build api # rebuild one service
+docker compose logs -f api
+docker compose restart worker    # after changing job code (report.py, images.py): no hot reload
+docker compose logs -f worker    # report job failures land here and on the job's own log
+docker compose down
 ```
 
-Frontend (`frontend/`):
+`backend/app/` and `frontend/src/` are volume-mounted with hot reload; anything else
+(`requirements.txt`, `package.json`, `vite.config.js`, Dockerfiles) needs a rebuild.
+Frontend: https://knowledge-farm.paws.home · API: https://api.knowledge-farm.paws.home/api/health
+
+## Tests
+
+Backend (SQLite in memory, vonk faked — no Docker needed):
 ```bash
-npm install
-npm run dev      # :5173
-npm run build    # tsc -b && vite build
-npm run lint     # eslint
+cd backend && uv venv .venv && uv pip install -r requirements-dev.txt   # once
+cd backend && .venv/bin/python -m pytest
+cd backend && .venv/bin/ruff check .
+```
+`tests/conftest.py` sets `DATABASE_URL`/`VONK_KEY` before importing the app, overrides `get_db`
+and `get_session_factory`, and points `settings.image_dir` at a temp dir per test (`image_dir`
+fixture). Jobs are run by awaiting `jobs.run_job` directly.
+
+Frontend (Vitest + Testing Library; GraphView is mocked in App.test because it needs a canvas):
+```bash
+cd frontend && npm install && npm test && npm run lint
 ```
 
-Full stack via Docker: `docker-compose up` (needs `.env` with `APP_DOMAIN` + `CADDY_NETWORK`; frontend served behind Caddy).
+## Architecture
 
-## Architecture notes
+```
+backend/app/
+  main.py            App, lifespan (create_all), routers; imports services/report so the job registers
+  config.py          Settings from .env: VONK_*, CONCEPTS_PER_NODE, GRAPH_CONCURRENCY, REPORT_*, IMAGE_*
+  database.py        Engine, SessionLocal, get_db, get_session_factory (for the streaming response)
+  models.py          Graph (seeds, params, nodes, edges as JSON) and Report (sections as JSON)
+  schemas.py         Node, Edge, IterationDelta, GraphOut, Section, ReportOut
+  routers/
+    graphs.py        GET /api/graphs/stream (SSE, saves at the end), list / get / delete
+    reports.py       POST /api/graphs/{id}/reports (queues grow_report), GET reports, …/markdown,
+                     GET /api/images?spec= and /api/images/{name}
+    jobs.py          Template: list / get / cancel / retry jobs
+  services/
+    ai.py            Shared AsyncVonk client (chat model + image model)
+    graph.py         normalize, expand_concept (ai.json, never raises), expand_graph (async generator)
+    report.py        outline() from the graph, prompts, text cleaning, the grow_report job
+    images.py        gen: tags → PNGs: parse_spec, sha1 cache key, generate(); ported from my-vault
+    jobs.py          Template job queue (do not hand-roll another)
+  worker.py          Template: `python -m app.worker`
 
-- **Streaming is the primary path.** The frontend uses `GET /api/generate/stream` (SSE) exclusively — `streamGraph` in `frontend/src/api.ts`, consumed in `App.tsx`. The graph accumulates client-side as iteration deltas arrive, so it grows layer by layer. `POST /api/generate` exists (buffers all deltas into one response) but is not used by the UI.
+frontend/src/
+  App.jsx            State: graph stream, saved graphs, report + its job, highlight logic
+  api.js             All fetch/EventSource calls
+  graph.js           normalize (mirror of the backend), pathToRoot, edge-key helpers
+  markdown.js        markdown-it render; gen: tags → <figure> with /api/images?spec=
+  components/
+    ConceptForm.jsx  Seeds, generations, max concepts, temperature
+    GraphView.jsx    react-force-graph-2d with custom hit-testing (see constraints)
+    ReportView.jsx   The growing report, progress bar, image placeholders, hover/pin sections
+    SavedGraphs.jsx  Reopen earlier graphs (and their latest report)
+  useJobs.js / JobsPanel.jsx   Template job polling and panel (collapsed under "Jobs")
+```
 
-- **Graph expansion** (`backend/graph.py::expand_graph`) is an async generator yielding one `IterationDelta` per iteration. Each iteration fans out concurrent `expand_concept` calls over the current frontier, bounded by a semaphore (`MAX_CONCURRENCY`). Nodes are deduped by `normalize()` (trimmed/lowercased, collapsed whitespace) — this normalized string is the node `id`. Edges are stored as `frozenset` pairs (undirected, deduped). `depth` = iteration at which a node was first discovered.
+## The report pipeline
 
-- **The normalized key is the contract between front and back.** `App.tsx` recomputes seed ids with the same `trim().toLowerCase().replace(/\s+/g, " ")` logic so it can match streamed node ids back to the original seeds. Keep these two normalizations in sync.
+1. **Outline, no model involved** (`report.outline`): depth-1 neighbours of the seed, ranked by
+   degree, top `REPORT_MAX_SECTIONS`. Each gets its depth-2 children (max 8) as material and a
+   list of related sections (direct edge or shared child). The graph decides what the report is
+   about; the model only writes.
+2. Intro → sections in parallel (through `ctx.gate("llm")`) → conclusion. Each part is saved to
+   the `reports` row as soon as it exists; the frontend polls it every 1.5 s.
+3. Every part except the conclusion carries one `![alt](gen: English prompt | 1280x720)` tag
+   (same rules as my-vault's `help/20-gen.md`). `keep_one_image` drops extras and
+   `repair_image_tags` restores a forgotten `gen:` prefix.
+4. Images are drawn last through `ctx.gate("image", IMAGE_CONCURRENCY)` and cached in the
+   `gen_images` volume as `<slug>-<sha1(prompt|size)[:8]>.png` plus a `.json` sidecar. A failed
+   image is logged and stays a pulsing placeholder; it never fails the job.
+5. Language: the UI sends `English` or `Nederlands`; `model_language` maps the latter to
+   "Dutch (Nederlands)". Every prompt ends with "write every sentence in …", and `write_text`
+   retries once if the answer `looks_english` anyway (local models drift).
 
-- **LLM calls** (`backend/llm.py`): single shared `httpx.AsyncClient`, OpenAI-compatible `/v1/chat/completions`. The model is told to return raw JSON `{"concepts": [...]}`; `_strip_fences` defensively removes code fences and `<think>...</think>` blocks before `json.loads`. `expand_concept` retries once on any failure and returns `[]` rather than raising, so one bad call never aborts an iteration.
+`source_node_ids` on each section drive the provenance highlight: hovering a section highlights
+those nodes in the graph; clicking a node scrolls to the section that grew from it.
 
-- **GraphView hit-testing is custom and deliberate.** `frontend/src/components/GraphView.tsx` disables react-force-graph's built-in pointer interaction (`enablePointerInteraction={false}`, `enableNodeDrag={false}`) and does its own drag/click/hover hit-testing in graph coordinates via `screen2GraphCoords`. This is a workaround for Brave's canvas "farbling" corrupting the library's offscreen shadow-canvas lookup — see the long comment in the pointer `useEffect`. Don't re-enable the built-in interaction handlers.
+## Key constraints
 
-- **Selecting a node** runs a BFS to the nearest seed (`pathToRoot` in `App.tsx`); the path is highlighted and non-path nodes are dimmed.
-
-## Config
-
-Backend env (`backend/.env`, see `.env.example`): `LLM_BASE_URL`, `LLM_MODEL` (default `google/gemma-4-26B-A4B-it`), `LLM_API_KEY`, `MAX_CONCURRENCY`. Defaults point at the local `vonk` LLM proxy. (Note: the README's env table lists a stale `LLM_MODEL` default — trust `llm.py` / `.env.example`.)
-
-Vite dev proxy (`vite.config.ts`) forwards `/api` and `/health` to `http://backend:8000` — the Docker service name. Running the frontend dev server outside Docker requires either resolving `backend` to localhost or setting `VITE_API_BASE`.
-
-## Ignore
-
-`test-env/` is a throwaway Python venv (Playwright/PIL for browser testing) — not application code.
+- **The normalised key is the contract between front and back.** Node ids are
+  `normalize(label)`; `frontend/src/graph.js::normalize` must match `services/graph.py::normalize`.
+- **GraphView hit-testing is custom on purpose.** Built-in pointer interaction is disabled
+  (`enablePointerInteraction={false}`, `enableNodeDrag={false}`) and drag/click/hover are done in
+  graph coordinates, because Brave's canvas farbling breaks force-graph's shadow-canvas lookup.
+  Don't re-enable the built-in handlers.
+- GraphView passes its container size to ForceGraph2D (ResizeObserver); without it the canvas
+  takes the window size and the graph sits off-centre when the report panel is open.
+- The graph stream runs in the API, not as a job: watching it grow is the point. Reports are
+  jobs because they take 1–2 minutes and must survive a closed tab.
+- A report row can stay `growing` if the worker is killed mid-job; the job row (marked failed on
+  worker restart) is the truth, and the frontend reads busy-ness from the job.
+- `*.paws.home` is not reachable from containers. Browser tests through the shared Playwright
+  service need `chromium.connect(ws, expose_network="*.paws.home")`.

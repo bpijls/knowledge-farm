@@ -1,49 +1,33 @@
-# Recursive Concept Graph Generator
+# Knowledge Farm
 
-Seed an LLM with concepts, recursively expand each into related ideas (up to N iterations), and explore the result as an interactive force-directed graph. Nodes are colored and sized by depth; cross-branch deduplication produces a true graph rather than a tree.
+Plant one word and watch a concept graph grow from it, then grow an illustrated report from
+that graph.
 
-## Architecture
+1. **Plant**: seed concepts are expanded by a local LLM (vonk) into related concepts over a few
+   generations. The graph streams in and grows layer by layer. Branches that meet are merged,
+   so it is a graph, not a tree.
+2. **Grow report**: a background job turns the seed's strongest branches into sections, writes
+   them (English or Dutch) and illustrates them with vonk's `image-fast` model. Sections appear
+   as they are written; images appear as they are drawn.
+3. **Trace**: hover a section to see which concepts it grew from; click a concept to trace it
+   back to the seed and jump to its section. Saved graphs and reports can be reopened, and a
+   report downloads as Markdown.
 
-```
-frontend (Vite+React, :5173) ──SSE──▶ backend (FastAPI, :8000)
-                                              │
-                                       LLM proxy (OpenAI-compatible)
-```
-
-Each iteration fans out concurrent LLM calls (semaphore-bounded), deduplicates concepts by normalized key (trimmed / lowercased), and streams deltas to the frontend so the graph grows layer by layer in real time.
-
-## Setup
-
-### Backend
-
-```bash
-cd backend
-cp .env.example .env          # edit if your LLM endpoint differs
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-### Frontend
+## Run
 
 ```bash
-cd frontend
-npm install
-npm run dev                   # http://localhost:5173
+./setup.sh                      # creates .env on first run; fill in VONK_KEY and DB_PASSWORD
+docker compose up -d --build
 ```
 
-## Environment variables (backend)
+Then open https://knowledge-farm.paws.home. Configuration lives in `.env` (see `.env.example`).
 
-| Variable        | Default                  | Description                        |
-|-----------------|--------------------------|------------------------------------|
-| LLM_BASE_URL    | http://localhost:4000    | OpenAI-compatible LLM proxy base URL |
-| LLM_MODEL       | (set in .env)            | Model ID passed to the proxy       |
-| LLM_API_KEY     | (set in .env)            | Bearer token for the proxy       |
-| MAX_CONCURRENCY | 8                        | Max parallel LLM calls per iteration |
+## Develop
 
-## API
+```bash
+cd backend && uv venv .venv && uv pip install -r requirements-dev.txt && .venv/bin/python -m pytest
+cd frontend && npm install && npm test && npm run lint
+```
 
-- `POST /api/generate` — `{ seeds, iterations, max_concepts? }` → `{ nodes, edges }`
-- `GET  /api/generate/stream?seeds=a,b&iterations=2` — SSE stream of iteration deltas
-- `GET  /health`
+Built on the house project template (FastAPI + Vite/React + Postgres + job worker). See
+`CLAUDE.md` for the architecture and the report pipeline.

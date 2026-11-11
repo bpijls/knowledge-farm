@@ -1,29 +1,20 @@
 import { useState } from "react";
 
-interface Props {
-  onSubmit: (
-    seeds: string[],
-    iterations: number,
-    maxConcepts: number,
-    temperature: number,
-  ) => void;
-  loading: boolean;
-}
 
-export function ConceptForm({ onSubmit, loading }: Props) {
-  const [seedsText, setSeedsText] = useState("machine learning");
+export function ConceptForm({ onSubmit, loading }) {
+  const [seedsText, setSeedsText] = useState("water");
   const [iterations, setIterations] = useState(2);
   const [maxConcepts, setMaxConcepts] = useState(200);
   const [temperature, setTemperature] = useState(0.7);
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e) {
     e.preventDefault();
     const seeds = seedsText
       .split(/[\n,]+/)
       .map((s) => s.trim())
       .filter(Boolean);
     if (seeds.length === 0) return;
-    onSubmit(seeds, iterations, maxConcepts, temperature);
+    onSubmit({ seeds, iterations, maxConcepts, temperature });
   }
 
   return (

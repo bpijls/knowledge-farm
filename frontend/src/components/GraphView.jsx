@@ -1,22 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { forceCollide } from "d3-force-3d";
-import type { GraphData } from "../types";
 
-interface Props {
-  data: GraphData;
-  seedIds: Set<string>;
-  showLabels: boolean;
-  selectedId: string | null;
-  pathIds: Set<string>;
-  pathEdges: Set<string>;
-  onSelectNode: (id: string | null) => void;
-}
 
 // Germination spectrum: a planted seed (amber) sends growth outward, maturing
 // from leaf-green through teal to a violet bloom at the deepest generations.
 // Tuned dark/saturated enough to read against the pale daylight field.
-function nodeColor(depth: number, isSeed: boolean): string {
+function nodeColor(depth, isSeed) {
   if (isSeed) return "#e0922a"; // sun amber — a planted seed
   const hue = Math.min(95 + (depth - 1) * 32, 285); // leaf-green → violet bloom
   return `hsl(${hue}, 62%, 46%)`;
@@ -27,12 +17,12 @@ const REDUCE_MOTION =
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const GERMINATE_MS = 520; // how long a node takes to sprout to full size
 
-function visualRadius(isSeed: boolean, deg: number): number {
+function visualRadius(isSeed, deg) {
   return isSeed ? 10 : Math.max(4, Math.min(4 + deg * 0.8, 12));
 }
 
 // Collision radius keeps node centers apart so each gets its own hit region.
-function collideRadius(isSeed: boolean, deg: number): number {
+function collideRadius(isSeed, deg) {
   return visualRadius(isSeed, deg) + 6;
 }
 
@@ -44,17 +34,17 @@ export function GraphView({
   pathIds,
   pathEdges,
   onSelectNode,
-}: Props) {
-  const fgRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<any>(null);
+}) {
+  const fgRef = useRef(null);
+  const containerRef = useRef(null);
+  const dragRef = useRef(null);
   // Tracks a press to distinguish a click (select) from a drag (move) / pan.
-  const pressRef = useRef<{ x: number; y: number; moved: boolean; node: any } | null>(null);
+  const pressRef = useRef(null);
   const onSelectRef = useRef(onSelectNode);
   onSelectRef.current = onSelectNode;
 
   const degree = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map();
     for (const e of data.edges) {
       map.set(e.source, (map.get(e.source) ?? 0) + 1);
       map.set(e.target, (map.get(e.target) ?? 0) + 1);
@@ -73,8 +63,22 @@ export function GraphView({
   // The canvas only exists once there are nodes to render (see early return).
   const hasGraph = graphData.nodes.length > 0;
 
+  // force-graph sizes its canvas to the window unless told otherwise; with the report panel
+  // open that pushes the graph off-centre, so follow the container's own size.
+  const [size, setSize] = useState(null);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize({ width: Math.round(width), height: Math.round(height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasGraph]);
+
   // Latest values accessible from the bound-once pointer listeners below.
-  const nodesRef = useRef<any[]>([]);
+  const nodesRef = useRef([]);
   nodesRef.current = graphData.nodes;
   const degreeRef = useRef(degree);
   degreeRef.current = degree;
@@ -82,7 +86,7 @@ export function GraphView({
   seedRef.current = seedIds;
 
   // Records when each node first appeared so paintNode can sprout it in.
-  const birthRef = useRef<Map<string, number>>(new Map());
+  const birthRef = useRef(new Map());
 
   // Coordinate-based dragging. We do NOT use force-graph's built-in node drag
   // because it identifies the target by reading a pixel off an offscreen "shadow"
@@ -97,7 +101,7 @@ export function GraphView({
     const canvas = container.querySelector("canvas");
     if (!canvas) return;
 
-    const hitRadius = (n: any): number => {
+    const hitRadius = (n) => {
       const isSeed = seedRef.current.has(n.id);
       const deg = degreeRef.current.get(n.id) ?? 0;
       const scale = fgRef.current?.zoom?.() ?? 1;
@@ -105,12 +109,12 @@ export function GraphView({
       return Math.max(visualRadius(isSeed, deg), 12 / scale);
     };
 
-    const nodeAt = (clientX: number, clientY: number): any => {
+    const nodeAt = (clientX, clientY) => {
       const fg = fgRef.current;
       if (!fg) return null;
       const rect = canvas.getBoundingClientRect();
       const gp = fg.screen2GraphCoords(clientX - rect.left, clientY - rect.top);
-      let best: any = null;
+      let best = null;
       let bestD = Infinity;
       for (const n of nodesRef.current) {
         if (n.x == null || n.y == null) continue;
@@ -127,7 +131,7 @@ export function GraphView({
     };
 
     // Pointer position from a mouse or touch event (in client coordinates).
-    const getXY = (ev: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+    const getXY = (ev) => {
       if ("touches" in ev) {
         const t = ev.touches[0] ?? ev.changedTouches[0];
         return t ? { x: t.clientX, y: t.clientY } : null;
@@ -135,7 +139,7 @@ export function GraphView({
       return { x: ev.clientX, y: ev.clientY };
     };
 
-    const onStart = (ev: MouseEvent | TouchEvent) => {
+    const onStart = (ev) => {
       const xy = getXY(ev);
       if (!xy) return;
       const node = nodeAt(xy.x, xy.y);
@@ -154,7 +158,7 @@ export function GraphView({
       fgRef.current?.d3AlphaTarget?.(0.3); // keep the render loop alive while dragging
     };
 
-    const onMove = (ev: MouseEvent | TouchEvent) => {
+    const onMove = (ev) => {
       const xy = getXY(ev);
       const press = pressRef.current;
       if (press && xy && !press.moved) {
@@ -192,13 +196,13 @@ export function GraphView({
       }
     };
 
-    const onHover = (ev: MouseEvent) => {
+    const onHover = (ev) => {
       if (dragRef.current) return;
       canvas.style.cursor = nodeAt(ev.clientX, ev.clientY) ? "grab" : "default";
     };
 
-    const cap = { capture: true } as const;
-    const capActive = { capture: true, passive: false } as const;
+    const cap = { capture: true };
+    const capActive = { capture: true, passive: false };
     container.addEventListener("mousedown", onStart, cap);
     container.addEventListener("touchstart", onStart, capActive);
     window.addEventListener("mousemove", onMove, cap);
@@ -230,7 +234,7 @@ export function GraphView({
     }
     fg.d3Force(
       "collide",
-      forceCollide((node: any) => {
+      forceCollide((node) => {
         const isSeed = seedIds.has(node.id);
         const deg = degree.get(node.id) ?? 0;
         return collideRadius(isSeed, deg);
@@ -243,10 +247,10 @@ export function GraphView({
   // separately in graph coordinates (see the pointer effect above), not via the
   // shadow canvas, so this only needs to draw.
   const paintNode = useCallback(
-    (node: any, ctx: CanvasRenderingContext2D) => {
+    (node, ctx) => {
       const isSeed = seedIds.has(node.id);
       const deg = degree.get(node.id) ?? 0;
-      const hasSelection = selectedId !== null;
+      const hasSelection = pathIds.size > 0;
       const onPath = pathIds.has(node.id);
       const isSelected = node.id === selectedId;
 
@@ -262,7 +266,7 @@ export function GraphView({
       }
       const r = visualRadius(isSeed, deg) * (0.45 + 0.55 * grow);
 
-      // Dim nodes off the highlighted lineage; sprouting nodes fade in.
+      // Dim nodes off the highlight (a traced lineage or a report section); sprouting nodes fade in.
       const dim = hasSelection && !onPath ? 0.18 : 1;
       ctx.globalAlpha = dim * (REDUCE_MOTION ? 1 : 0.25 + 0.75 * grow);
 
@@ -290,10 +294,10 @@ export function GraphView({
 
   // Draw all labels in a second pass so no node circle paints over another node's text.
   const paintLabels = useCallback(
-    (ctx: CanvasRenderingContext2D) => {
+    (ctx) => {
       ctx.save();
       ctx.textAlign = "center";
-      for (const node of graphData.nodes as any[]) {
+      for (const node of graphData.nodes) {
         if (node.x == null || node.y == null) continue;
         const isSeed = seedIds.has(node.id);
         const deg = degree.get(node.id) ?? 0;
@@ -326,7 +330,7 @@ export function GraphView({
   }, []);
 
   const linkOnPath = useCallback(
-    (link: any) => {
+    (link) => {
       const s = typeof link.source === "object" ? link.source.id : link.source;
       const t = typeof link.target === "object" ? link.target.id : link.target;
       return pathEdges.has(`${s}|${t}`);
@@ -335,16 +339,16 @@ export function GraphView({
   );
 
   const linkColor = useCallback(
-    (link: any) => {
+    (link) => {
       if (linkOnPath(link)) return "#2e7fb0"; // sky — the active lineage
       // Stem green, kept clearly visible against the pale field.
-      return selectedId !== null ? "rgba(70,82,58,0.1)" : "rgba(70,82,58,0.4)";
+      return pathIds.size > 0 ? "rgba(70,82,58,0.1)" : "rgba(70,82,58,0.4)";
     },
-    [linkOnPath, selectedId],
+    [linkOnPath, pathIds],
   );
 
   const linkWidth = useCallback(
-    (link: any) => (linkOnPath(link) ? 3 : 1.3),
+    (link) => (linkOnPath(link) ? 3 : 1.3),
     [linkOnPath],
   );
 
@@ -354,6 +358,8 @@ export function GraphView({
     <div className="graph-container" ref={containerRef}>
       <ForceGraph2D
         ref={fgRef}
+        width={size?.width}
+        height={size?.height}
         graphData={graphData}
         nodeId="id"
         nodeCanvasObject={paintNode}
