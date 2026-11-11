@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app import models  # noqa: F401 - registers the tables
 from app.config import settings
@@ -17,6 +18,11 @@ async def lifespan(app: FastAPI):
     # Fine for a prototype; swap for Alembic once the schema starts moving.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # create_all never alters an existing table: columns added later are added here.
+        if conn.dialect.name == "postgresql":
+            await conn.execute(text(
+                "ALTER TABLE reports ADD COLUMN IF NOT EXISTS style VARCHAR(32) "
+                "NOT NULL DEFAULT 'prose'"))
     # Normally the `worker` container runs the jobs; with JOBS_INLINE=true this process does.
     inline_worker = await jobs.start_inline_worker()
     yield

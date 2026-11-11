@@ -50,6 +50,7 @@ class ReportOut(BaseModel):
     graph_id: str
     title: str
     status: str
+    style: str
     sections: list[Section]
     created_at: datetime
 

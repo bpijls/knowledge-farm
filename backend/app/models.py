@@ -42,5 +42,7 @@ class Report(Base):
     graph_id: Mapped[str] = mapped_column(ForeignKey("graphs.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(255), default="")
     status: Mapped[str] = mapped_column(String(16), default="growing")   # growing | done | failed
+    # A key of services/report.py STYLES: prose | business | poetic | flyer
+    style: Mapped[str] = mapped_column(String(32), default="prose", server_default="prose")
     sections: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

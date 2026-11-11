@@ -25,3 +25,7 @@ test("a tag without gen: is treated as one", () => {
   const html = renderMarkdown("![m](3D render of a molecule, blue)");
   expect(html).toContain('data-spec="3D render of a molecule, blue"');
 });
+
+test("single newlines are line breaks (poems, flyer lists)", () => {
+  expect(renderMarkdown("De grond ademt,\neen stil gebed")).toContain("De grond ademt,<br>");
+});

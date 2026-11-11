@@ -4,7 +4,19 @@ import { renderMarkdown } from "../markdown.js";
 
 // The report as it grows: sections appear as the job writes them, images as it draws them.
 // Hovering a section highlights the concepts it grew from; clicking pins that highlight.
-export function ReportView({ report, job, activeKey, pinnedKey, onHover, onPin, onClose }) {
+export function ReportView({
+  report,
+  styleLabel,
+  versions = [],
+  styleName = (key) => key,
+  onPickVersion,
+  job,
+  activeKey,
+  pinnedKey,
+  onHover,
+  onPin,
+  onClose,
+}) {
   const bodyRef = useRef(null);
   // A new value whenever the job makes progress, so images that were not drawn yet are retried.
   const bust = job ? `${job.done}-${job.status}` : "";
@@ -30,13 +42,28 @@ export function ReportView({ report, job, activeKey, pinnedKey, onHover, onPin, 
   const percent = job?.total ? Math.round((job.done / job.total) * 100) : 0;
 
   return (
-    <aside className="report" aria-label="Report">
+    <aside className={`report report-style-${report.style ?? "prose"}`} aria-label="Report">
       <header className="report-head">
         <div>
-          <p className="report-kicker">Harvest</p>
+          <p className="report-kicker">Harvest{styleLabel ? ` · ${styleLabel}` : ""}</p>
           <h2 className="report-title">{report.title}</h2>
         </div>
         <div className="report-actions">
+          {versions.length > 1 && (
+            <select
+              className="quiet-btn"
+              value={report.id}
+              onChange={(e) => onPickVersion(e.target.value)}
+              aria-label="Report version"
+            >
+              {versions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {styleName(v.style)} ·{" "}
+                  {new Date(v.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </option>
+              ))}
+            </select>
+          )}
           {report.status === "done" && (
             <a className="quiet-btn" href={reportMarkdownUrl(report.id)} target="_blank" rel="noreferrer">
               .md

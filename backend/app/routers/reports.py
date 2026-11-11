@@ -1,4 +1,6 @@
 """Reports grown from a graph, and the images they show."""
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
@@ -11,13 +13,14 @@ from app.routers.jobs import JobOut
 from app.schemas import ReportOut
 from app.services import images, jobs
 from app.services.images import GEN_RE, ImageError
-from app.services.report import repair_image_tags
+from app.services.report import STYLES, repair_image_tags
 
 router = APIRouter(tags=["reports"])
 
 
 class ReportIn(BaseModel):
     language: str | None = Field(default=None, max_length=40)
+    style: Literal["prose", "business", "poetic", "flyer"] = "prose"
 
 
 class ReportStarted(BaseModel):
@@ -31,13 +34,20 @@ async def grow_report(graph_id: str, payload: ReportIn | None = None,
     graph = await db.get(Graph, graph_id)
     if graph is None:
         raise HTTPException(404, "Graph not found")
-    report = Report(graph_id=graph_id, title=", ".join(graph.seeds))
+    report = Report(graph_id=graph_id, title=", ".join(graph.seeds),
+                    style=payload.style if payload else "prose")
     db.add(report)
     await db.commit()
     await db.refresh(report)
     params = {"report_id": report.id, "language": payload.language if payload else None}
     job = await jobs.enqueue(db, "grow_report", params, subject=f"graph:{graph_id}")
     return {"report": report, "job": job}
+
+
+@router.get("/api/report-styles")
+async def report_styles() -> list[dict]:
+    """The styles a report can be grown in, for the selector."""
+    return [{"key": s.key, "label": s.label} for s in STYLES.values()]
 
 
 @router.get("/api/graphs/{graph_id}/reports", response_model=list[ReportOut])

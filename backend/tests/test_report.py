@@ -196,3 +196,39 @@ async def test_report_needs_branches(client, factory, monkeypatch):
 
 async def test_missing_graph_is_404(client):
     assert (await client.post("/api/graphs/nope/reports")).status_code == 404
+
+
+async def test_style_reaches_every_prompt(client, factory, monkeypatch):
+    seen = []
+
+    class Fake(FakeAI):
+        async def chat(self, prompt, **kwargs):
+            seen.append((prompt, kwargs.get("system", "")))
+            return await super().chat(prompt, **kwargs)
+
+    fake = Fake()
+    monkeypatch.setattr(report_service, "ai", fake)
+    monkeypatch.setattr(images, "ai", fake)
+    async with factory() as db:
+        g = Graph(seeds=["water"], nodes=NODES, edges=EDGES, params={})
+        db.add(g)
+        await db.commit()
+    res = await client.post(f"/api/graphs/{g.id}/reports", json={"style": "flyer"})
+    assert res.json()["report"]["style"] == "flyer"
+    await jobs.run_job(res.json()["job"]["id"], factory)
+
+    flyer = report_service.STYLES["flyer"]
+    assert seen and all(flyer.voice in system for _, system in seen)
+    assert all("commercial flyer text" in prompt for prompt, _ in seen)
+    image_prompts = [p for p, _ in seen if "closing part" not in p]
+    assert all(flyer.image in p for p in image_prompts)
+
+
+async def test_unknown_style_is_rejected_and_styles_are_listed(client, factory):
+    async with factory() as db:
+        g = Graph(seeds=["water"], nodes=NODES, edges=EDGES, params={})
+        db.add(g)
+        await db.commit()
+    assert (await client.post(f"/api/graphs/{g.id}/reports", json={"style": "limerick"})).status_code == 422
+    styles = (await client.get("/api/report-styles")).json()
+    assert [s["key"] for s in styles] == ["prose", "business", "poetic", "flyer"]

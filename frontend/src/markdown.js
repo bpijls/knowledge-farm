@@ -5,7 +5,8 @@ import { imageUrl } from "./api.js";
 // the text; here its src becomes the cached image's URL, and the image shows a placeholder
 // until the job has drawn it (see ReportView: a failed load retries on the next refresh).
 
-const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
+// breaks: a single newline is a line break. Poems and the flyer's ✓ lines depend on it.
+const md = new MarkdownIt({ html: false, linkify: true, typographer: true, breaks: true });
 
 // markdown-it refuses link targets with spaces, so turn each gen: tag into a token it accepts
 // before parsing and restore the spec in the image rule.

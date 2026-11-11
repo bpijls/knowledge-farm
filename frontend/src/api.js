@@ -41,8 +41,9 @@ export const getGraph = (id) => request(`/graphs/${id}`);
 export const deleteGraph = (id) => request(`/graphs/${id}`, { method: "DELETE" });
 
 // Reports: growing one queues a background job; the report row fills in as it runs.
-export const growReport = (graphId, language) =>
-  request(`/graphs/${graphId}/reports`, { method: "POST", body: JSON.stringify({ language }) });
+export const growReport = (graphId, language, style) =>
+  request(`/graphs/${graphId}/reports`, { method: "POST", body: JSON.stringify({ language, style }) });
+export const listStyles = () => request("/report-styles");
 export const listReports = (graphId) => request(`/graphs/${graphId}/reports`);
 export const getReport = (id) => request(`/reports/${id}`);
 export const reportMarkdownUrl = (id) => `${BASE}/api/reports/${id}/markdown`;

@@ -23,6 +23,7 @@ const REPORT = {
   graph_id: "g1",
   title: "water",
   status: "done",
+  style: "prose",
   created_at: "2026-11-11T10:01:00Z",
   sections: [
     { key: "intro", title: "", markdown: "Water is everywhere.", source_node_ids: ["water"] },
@@ -31,12 +32,20 @@ const REPORT = {
 };
 
 beforeEach(() => {
-  globalThis.fetch = vi.fn((url) => {
+  globalThis.fetch = vi.fn((url, options) => {
     const u = String(url);
     if (u.includes("/api/jobs")) return json([]);
     if (u.endsWith("/api/graphs")) return json([GRAPH]);
     if (u.endsWith("/api/graphs/g1")) return json(GRAPH);
-    if (u.endsWith("/api/graphs/g1/reports")) return json([REPORT]);
+    if (u.endsWith("/api/graphs/g1/reports")) {
+      if (options?.method === "POST") return json({ report: { ...REPORT, status: "growing" }, job: { id: "j1" } });
+      return json([REPORT]);
+    }
+    if (u.endsWith("/api/report-styles"))
+      return json([
+        { key: "prose", label: "Prose" },
+        { key: "flyer", label: "Commercial flyer" },
+      ]);
     return json([]);
   });
 });
@@ -49,4 +58,17 @@ test("reopening a saved graph shows its report with images", async () => {
   expect(screen.getByText("Water is everywhere.")).toBeDefined();
   expect(document.querySelector("figure.gen img").getAttribute("src")).toContain("/api/images?spec=");
   expect(screen.getByRole("button", { name: "Grow again" })).toBeDefined();
+});
+
+test("the chosen style is sent with a new report", async () => {
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "water" }));
+  const select = await screen.findByRole("combobox", { name: "Report style" });
+  await screen.findByRole("option", { name: "Commercial flyer" });
+  fireEvent.change(select, { target: { value: "flyer" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Grow again" }));
+  await waitFor(() => {
+    const post = fetch.mock.calls.find(([, o]) => o?.method === "POST");
+    expect(JSON.parse(post[1].body)).toEqual({ language: "English", style: "flyer" });
+  });
 });

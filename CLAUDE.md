@@ -100,7 +100,13 @@ frontend/src/
 4. Images are drawn last through `ctx.gate("image", IMAGE_CONCURRENCY)` and cached in the
    `gen_images` volume as `<slug>-<sha1(prompt|size)[:8]>.png` plus a `.json` sidecar. A failed
    image is logged and stays a pulsing placeholder; it never fails the job.
-5. Language: the UI sends `English` or `Nederlands`; `model_language` maps the latter to
+5. Style: `STYLES` in `report.py` (prose, business, poetic, flyer). Each sets the voice (system
+   prompt), the length and shape of intro / section / conclusion, the conclusion's heading and
+   the visual style appended to every image prompt. The style is stored on the `reports` row
+   (`style` column, added by an `ALTER TABLE … IF NOT EXISTS` in `main.py`'s lifespan, since
+   `create_all` never alters a table); the frontend styles the report per style
+   (`.report-style-*`) and lists a graph's earlier reports in a version picker.
+6. Language: the UI sends `English` or `Nederlands`; `model_language` maps the latter to
    "Dutch (Nederlands)". Every prompt ends with "write every sentence in …", and `write_text`
    retries once if the answer `looks_english` anyway (local models drift).
 

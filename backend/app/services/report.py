@@ -84,11 +84,80 @@ _IMAGE_RULES = (
 )
 
 SYSTEM = (
-    "You write one part of a short illustrated report that grows from a single seed word and "
-    "the concepts that word led to. Write in {language}, in plain Markdown, for a curious "
-    "general reader: concrete, vivid, no filler, no bullet lists. Do not start with a heading: "
-    "the app adds it. Weave the given concepts in naturally; never just list them."
+    "You write one part of a short illustrated text that grows from a single seed word and "
+    "the concepts that word led to. Write in {language}, in plain Markdown. {voice} "
+    "Do not start with a heading unless asked to. Weave the given concepts in naturally; "
+    "never just list them."
 )
+
+
+@dataclass(frozen=True)
+class Style:
+    """How a report is written: the voice, the length of each part, and the look of its images."""
+
+    key: str
+    label: str
+    voice: str            # added to the system prompt
+    intro: str            # length/shape of each part, put into its prompt
+    section: str
+    conclusion: str
+    closing_heading: str  # what the conclusion's '## ' heading should be
+    image: str            # the visual style every image prompt must use
+
+
+STYLES: dict[str, Style] = {s.key: s for s in [
+    Style(
+        key="prose", label="Prose",
+        voice="Write essayistic prose for a curious general reader: concrete, vivid, no filler, "
+              "no bullet lists.",
+        intro="about 120 words, 1–2 paragraphs",
+        section="about 180 words, 2–3 paragraphs",
+        conclusion="one or two paragraphs, about 100 words, that tie the threads together",
+        closing_heading="a short, evocative heading",
+        image="photographic or painterly, natural light",
+    ),
+    Style(
+        key="business", label="Business report",
+        voice="Write a business report for decision makers: neutral, factual and precise, short "
+              "paragraphs, no metaphors or flourishes. Where it helps, end a part with two or "
+              "three bullet points of key takeaways in bold-free plain text.",
+        intro="an executive summary of about 100 words",
+        section="about 150 words: the facts, then why it matters, then 2–3 takeaway bullets",
+        conclusion="conclusions and three numbered recommendations, about 100 words",
+        closing_heading="a plain heading such as 'Conclusions and recommendations' in the text's language",
+        image="clean corporate photography or a minimal flat infographic-style illustration, "
+              "neutral colours, bright even light",
+    ),
+    Style(
+        key="poetic", label="Poetic",
+        voice="Write lyrical, poetic text: free verse with short lines and stanzas separated by "
+              "blank lines, rich imagery, rhythm and sound, metaphor over explanation. No rhyme "
+              "scheme needed, no bullet lists.",
+        intro="a short poem of 8–12 lines",
+        section="a poem of 12–18 lines in three or four stanzas",
+        conclusion="a closing poem of 6–10 lines",
+        closing_heading="a short poetic title",
+        image="dreamlike watercolour or ink painting, soft muted colours, atmospheric light",
+    ),
+    Style(
+        key="flyer", label="Commercial flyer",
+        voice="Write commercial flyer copy that sells the topic: punchy, upbeat, persuasive, "
+              "second person ('you'), short sentences, a few exclamation marks, bold key phrases "
+              "with **double asterisks**. Short lists with ✓ are allowed.",
+        intro="a catchy opening of about 50 words, starting with a bold one-line slogan",
+        section="about 70 words: a bold hook line, a short pitch, and 2–3 ✓ benefit lines",
+        conclusion="a call to action of about 50 words that makes the reader want to act now",
+        closing_heading="a short, exciting call-to-action heading",
+        # "Advertising" alone makes image models paint fake slogans; forbid it explicitly.
+        image="bold, colourful product-style photography, high contrast, glossy, eye-catching "
+              "studio light, absolutely no text, letters, logos or signs anywhere in the image",
+    ),
+]}
+DEFAULT_STYLE = "prose"
+
+
+def get_style(key: str | None) -> Style:
+    return STYLES.get(key or DEFAULT_STYLE, STYLES[DEFAULT_STYLE])
 
 
 # What the model is told for a UI language name; local models follow "Dutch" more reliably.
@@ -99,8 +168,8 @@ def model_language(language: str) -> str:
     return _MODEL_LANGUAGE.get(language.strip().lower(), language.strip())
 
 
-def _system(language: str) -> str:
-    return SYSTEM.format(language=language)
+def _system(language: str, style: Style) -> str:
+    return SYSTEM.format(language=language, voice=style.voice)
 
 
 def _closing(language: str) -> str:
@@ -121,14 +190,17 @@ def looks_english(text: str) -> bool:
     return len(words) > 20 and sum(w in _ENGLISH_MARKERS for w in words) / len(words) > 0.05
 
 
-async def write_text(prompt: str, language: str, *, max_tokens: int) -> str:
+async def write_text(prompt: str, language: str, *, max_tokens: int,
+                     style: Style | None = None) -> str:
     """One model call for report text, retried once if it came back in English by mistake."""
-    text = await ai.chat(prompt, system=_system(language), max_tokens=max_tokens, temperature=0.7)
+    style = style or get_style(None)
+    text = await ai.chat(prompt, system=_system(language, style), max_tokens=max_tokens,
+                         temperature=0.7)
     if not is_english(language) and looks_english(images.GEN_RE.sub("", text)):
         log.info("answer drifted into English; asking again in %s", language)
         text = await ai.chat(
             f"Your previous answer was in English, which is wrong. {prompt}",
-            system=_system(language), max_tokens=max_tokens, temperature=0.5)
+            system=_system(language, style), max_tokens=max_tokens, temperature=0.5)
     return text
 
 
@@ -137,38 +209,42 @@ def section_title(label: str) -> str:
     return label[:1].upper() + label[1:] if label == label.lower() else label
 
 
-def _image_rules(language: str) -> str:
-    return _IMAGE_RULES.format(language=language, size=settings.image_size)
+def _image_rules(language: str, style: Style) -> str:
+    return (_IMAGE_RULES.format(language=language, size=settings.image_size)
+            + f" Visual style for the image prompt: {style.image}.")
 
 
-def intro_prompt(o: Outline, language: str) -> str:
+def intro_prompt(o: Outline, language: str, style: Style | None = None) -> str:
+    style = style or get_style(None)
     return (
-        f'Write the introduction (about 120 words, 1–2 paragraphs) of a report on "{o.title}". '
-        f"The report's sections will be about: {', '.join(b.label for b in o.branches)}. "
+        f'Write the opening ({style.intro}) of a {style.label.lower()} text on "{o.title}". '
+        f"The parts after it will be about: {', '.join(b.label for b in o.branches)}. "
         f"Say why these belong together, without summarising each one. "
-        + _image_rules(language) + _closing(language)
+        + _image_rules(language, style) + _closing(language)
     )
 
 
-def section_prompt(o: Outline, b: Branch, language: str) -> str:
+def section_prompt(o: Outline, b: Branch, language: str, style: Style | None = None) -> str:
+    style = style or get_style(None)
     related = f" It connects to the sections on {', '.join(b.links)}; mention that link once." \
         if b.links else ""
     material = ", ".join(b.children) or "(no further concepts)"
     return (
-        f'Write the section "{b.label}" (about 180 words, 2–3 paragraphs) of a report on '
+        f'Write the section "{b.label}" ({style.section}) of a {style.label.lower()} text on '
         f'"{o.title}". Build it from these related concepts: {material}.{related} '
         + ("" if is_english(language) else
            f"Start with one line '## ' plus the section title in {language}. ")
-        + _image_rules(language) + _closing(language)
+        + _image_rules(language, style) + _closing(language)
     )
 
 
-def conclusion_prompt(o: Outline, language: str) -> str:
+def conclusion_prompt(o: Outline, language: str, style: Style | None = None) -> str:
+    style = style or get_style(None)
     return (
-        f'Write the closing part (about 100 words) of a report on "{o.title}" that covered '
-        f"{', '.join(b.label for b in o.branches)}. Start with one line '## ' plus a short, "
-        f"evocative heading in {language}, then one or two paragraphs that tie the threads "
-        f"together. No image." + _closing(language)
+        f'Write the closing part ({style.conclusion}) of a {style.label.lower()} text on '
+        f'"{o.title}" that covered {", ".join(b.label for b in o.branches)}. Start with one '
+        f"line '## ' plus {style.closing_heading} in {language}, then the text. No image."
+        + _closing(language)
     )
 
 
@@ -222,6 +298,7 @@ async def grow_report(ctx: JobContext, report_id: str, language: str | None = No
         report = await db.get(Report, report_id)
         if report is None:
             raise RuntimeError(f"Report {report_id} no longer exists")
+        style = get_style(report.style)
         graph = await db.get(Graph, report.graph_id)
         nodes, edges = list(graph.nodes), list(graph.edges)
 
@@ -244,7 +321,8 @@ async def grow_report(ctx: JobContext, report_id: str, language: str | None = No
         await ctx.set_total(len(order))
         await ctx.progress("Writing the introduction")
         async with ctx.gate("llm"):
-            text = await write_text(intro_prompt(o, language), language, max_tokens=600)
+            text = await write_text(intro_prompt(o, language, style), language, max_tokens=600,
+                                    style=style)
         written["intro"] = {"key": "intro", "title": "", "markdown": keep_one_image(split_heading(text)[1]),
                             "source_node_ids": o.seed_ids}
         await save()
@@ -255,8 +333,8 @@ async def grow_report(ctx: JobContext, report_id: str, language: str | None = No
         async def write(i: int, b: Branch) -> None:
             async with ctx.gate("llm"):
                 try:
-                    text = await write_text(section_prompt(o, b, language), language,
-                                            max_tokens=800)
+                    text = await write_text(section_prompt(o, b, language, style), language,
+                                            max_tokens=800, style=style)
                 except Exception as exc:  # noqa: BLE001 - one section must not sink the report
                     await ctx.step(f"  {b.label}: failed ({exc})")
                     return
@@ -273,7 +351,8 @@ async def grow_report(ctx: JobContext, report_id: str, language: str | None = No
 
         await ctx.progress("Writing the conclusion")
         async with ctx.gate("llm"):
-            text = await write_text(conclusion_prompt(o, language), language, max_tokens=500)
+            text = await write_text(conclusion_prompt(o, language, style), language,
+                                    max_tokens=500, style=style)
         heading, body = split_heading(text)
         written["conclusion"] = {"key": "conclusion", "title": section_title(heading or ""), "markdown": drop_images(body),
                                  "source_node_ids": [*o.seed_ids, *(b.id for b in o.branches)]}

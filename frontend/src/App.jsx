@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getGraph, getReport, growReport, listGraphs, listReports, streamGraph } from "./api.js";
+import {
+  getGraph,
+  getReport,
+  growReport,
+  listGraphs,
+  listReports,
+  listStyles,
+  streamGraph,
+} from "./api.js";
 import { ConceptForm } from "./components/ConceptForm.jsx";
 import { GraphView } from "./components/GraphView.jsx";
 import { ReportView } from "./components/ReportView.jsx";
@@ -11,11 +19,22 @@ import { isBusy, useJobs } from "./useJobs.js";
 const LANGUAGES = ["English", "Nederlands"];
 const EMPTY = { nodes: [], edges: [] };
 
-function storedLanguage() {
+// Until /api/report-styles answers, only the default is offered.
+const DEFAULT_STYLES = [{ key: "prose", label: "Prose" }];
+
+function stored(key, fallback) {
   try {
-    return localStorage.getItem("kf-language") || LANGUAGES[0];
+    return localStorage.getItem(key) || fallback;
   } catch {
-    return LANGUAGES[0];
+    return fallback;
+  }
+}
+
+function remember(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* private window: just don't remember it */
   }
 }
 
@@ -31,10 +50,20 @@ export default function App() {
   const [saved, setSaved] = useState([]);
 
   const [report, setReport] = useState(null);
+  // Every report grown from the open graph, newest first, to switch between versions.
+  const [versions, setVersions] = useState([]);
   const [reportJobId, setReportJobId] = useState(null);
   const [hoverKey, setHoverKey] = useState(null);
   const [pinnedKey, setPinnedKey] = useState(null);
-  const [language, setLanguage] = useState(storedLanguage);
+  const [language, setLanguage] = useState(() => stored("kf-language", LANGUAGES[0]));
+  const [styles, setStyles] = useState(DEFAULT_STYLES);
+  const [style, setStyle] = useState(() => stored("kf-style", "prose"));
+
+  useEffect(() => {
+    listStyles()
+      .then((list) => list.length && setStyles(list))
+      .catch(() => {});
+  }, []);
 
   const refreshSaved = useCallback(() => listGraphs().then(setSaved).catch(() => {}), []);
   useEffect(() => {
@@ -75,8 +104,9 @@ export default function App() {
     setHoverKey(null);
     setPinnedKey(null);
     try {
-      const started = await growReport(graphId, language);
+      const started = await growReport(graphId, language, style);
       setReport(started.report);
+      setVersions((v) => [started.report, ...v]);
       setReportJobId(started.job.id);
       await refreshJobs();
     } catch (e) {
@@ -86,11 +116,12 @@ export default function App() {
 
   function chooseLanguage(value) {
     setLanguage(value);
-    try {
-      localStorage.setItem("kf-language", value);
-    } catch {
-      /* private window: just don't remember it */
-    }
+    remember("kf-language", value);
+  }
+
+  function chooseStyle(value) {
+    setStyle(value);
+    remember("kf-style", value);
   }
 
   // --- highlight: a report section wins over a traced path ---------------------------------
@@ -125,6 +156,7 @@ export default function App() {
   function resetView() {
     setSelectedId(null);
     setReport(null);
+    setVersions([]);
     setReportJobId(null);
     setHoverKey(null);
     setPinnedKey(null);
@@ -174,6 +206,7 @@ export default function App() {
       setGraphData({ nodes: graph.nodes, edges: graph.edges });
       setStatus(`Reopened · ${graph.nodes.length} concepts, ${graph.edges.length} links`);
       const reports = await listReports(graph.id);
+      setVersions(reports);
       if (reports.length) setReport(reports[0]);
     } catch (e) {
       setError(e.message);
@@ -196,15 +229,22 @@ export default function App() {
         {graphId && !loading && (
           <div className="harvest">
             <div className="harvest-row">
+              <select value={style} onChange={(e) => chooseStyle(e.target.value)} aria-label="Report style">
+                {styles.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
               <select value={language} onChange={(e) => chooseLanguage(e.target.value)} aria-label="Report language">
                 {LANGUAGES.map((l) => (
                   <option key={l}>{l}</option>
                 ))}
               </select>
-              <button type="button" className="harvest-btn" onClick={onGrowReport} disabled={reportBusy}>
-                {reportBusy ? "Growing report…" : report ? "Grow again" : "Grow report"}
-              </button>
             </div>
+            <button type="button" className="harvest-btn" onClick={onGrowReport} disabled={reportBusy}>
+              {reportBusy ? "Growing report…" : report ? "Grow again" : "Grow report"}
+            </button>
           </div>
         )}
 
@@ -252,6 +292,18 @@ export default function App() {
       {report && (
         <ReportView
           report={report}
+          styleLabel={styles.find((s) => s.key === report.style)?.label}
+          versions={versions}
+          styleName={(key) => styles.find((s) => s.key === key)?.label ?? key}
+          onPickVersion={async (id) => {
+            setHoverKey(null);
+            setPinnedKey(null);
+            try {
+              setReport(await getReport(id));
+            } catch (e) {
+              setError(e.message);
+            }
+          }}
           job={reportJob}
           activeKey={activeKey}
           pinnedKey={pinnedKey}

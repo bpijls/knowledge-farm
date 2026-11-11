@@ -369,6 +369,9 @@ body {
 .harvest {
   border-top: 1px solid var(--rule);
   padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .harvest-row {
@@ -377,6 +380,9 @@ body {
 }
 
 .harvest-row select {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
   background: var(--well);
   border: 1px solid var(--rule);
   border-radius: 4px;
@@ -626,6 +632,38 @@ button.link {
   font-size: 0.74rem;
   color: var(--stem);
 }
+
+/* ── Report styles: same content, different typography ── */
+.report-style-business .report-body { font-size: 0.94rem; line-height: 1.55; }
+.report-style-business .report-section h3 {
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sky);
+}
+.report-style-business .report-section ul,
+.report-style-business .report-section ol { margin: 0.6em 0 0 1.2em; }
+
+.report-style-poetic .report-body { font-size: 1.05rem; line-height: 1.85; }
+.report-style-poetic .report-section { text-align: center; }
+.report-style-poetic .report-section p { font-style: italic; }
+.report-style-poetic .report-section h3 { font-weight: 400; font-style: italic; color: var(--bloom); }
+.report-style-poetic .report-title { font-weight: 400; font-style: italic; text-transform: none; }
+
+.report-style-flyer .report-head { background: var(--seed); border-bottom-color: var(--seed-deep); }
+.report-style-flyer .report-kicker { color: #2a1d08; }
+.report-style-flyer .report-title { font-size: 2.4rem; text-transform: uppercase; }
+.report-style-flyer .report-section h3 {
+  font-size: 1.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--seed-deep);
+}
+.report-style-flyer .report-section strong { color: var(--seed-deep); }
+.report-style-flyer .report-section ul { list-style: none; margin-top: 0.5em; }
+.report-style-flyer .report-section figure.gen img { border-radius: 12px; }
 
 @keyframes sprout {
   from { opacity: 0; transform: translateY(6px); }
