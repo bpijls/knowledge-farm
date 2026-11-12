@@ -39,7 +39,9 @@ services:
         aliases: [knowledge-farm-api]
       caddy_proxy:
     labels:
-      caddy: ${API_DOMAIN}
+      # Required: an empty `caddy` label merges this reverse_proxy into Caddy's global block,
+      # which makes caddy-docker-proxy reject the config for every site on the host.
+      caddy: ${API_DOMAIN:?set API_DOMAIN in .env (on feib.nl use docker-compose.prod.yml)}
       caddy.reverse_proxy: "{{upstreams 8000}}"
       caddy_docker_network: ${CADDY_NETWORK}
 
@@ -72,7 +74,7 @@ services:
       - ./frontend/src:/app/src
     networks: [default, caddy_proxy]
     labels:
-      caddy: ${APP_DOMAIN}
+      caddy: ${APP_DOMAIN:?set APP_DOMAIN in .env}
       caddy.reverse_proxy: "{{upstreams 3000}}"
       caddy_docker_network: ${CADDY_NETWORK}
 

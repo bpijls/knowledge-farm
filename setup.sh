@@ -16,7 +16,7 @@ fi
 
 # Fail early and legibly rather than halfway through a container start.
 missing=()
-for var in VONK_KEY DB_PASSWORD APP_DOMAIN CADDY_NETWORK; do
+for var in VONK_KEY DB_PASSWORD APP_DOMAIN API_DOMAIN CADDY_NETWORK; do
   value="$(grep -E "^${var}=" .env | cut -d= -f2- || true)"
   [ -z "$value" ] && missing+=("$var")
 done
