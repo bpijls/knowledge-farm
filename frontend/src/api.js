@@ -6,11 +6,18 @@ async function request(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+  // Locked out (no or expired access cookie): the gate in KeyGate.jsx asks for the key again.
+  if (res.status === 401 && !path.startsWith("/login")) window.dispatchEvent(new Event("kf-locked"));
   if (!res.ok) throw new Error(`${options.method ?? "GET"} ${path} → ${res.status}`);
   return res.status === 204 ? null : res.json();
 }
 
 export const getHealth = () => request("/health");
+
+// Access: one shared key, traded for an HttpOnly cookie (backend services/access.py).
+export const getSession = () => request("/session");
+export const login = (key) => request("/login", { method: "POST", body: JSON.stringify({ key }) });
+export const logout = () => request("/logout", { method: "POST" });
 
 // Graphs. Growing one streams over SSE: one message per iteration, then {done, graph_id}.
 export function streamGraph({ seeds, iterations, maxConcepts, temperature }, { onDelta, onDone, onError }) {

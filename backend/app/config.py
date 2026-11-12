@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Images drawn at once; image models are slower and heavier than chat.
     image_concurrency: int = 2
 
+    # The one key that opens the site (services/access.py). Empty: no login, for local dev only.
+    access_key: str = ""
+
     cors_origins: str = "*"
 
     # Background jobs (app/services/jobs.py). False: the `worker` container runs them.

@@ -55,18 +55,20 @@ cd frontend && npm install && npm test && npm run lint
 
 ```
 backend/app/
-  main.py            App, lifespan (create_all), routers; imports services/report so the job registers
-  config.py          Settings from .env: VONK_*, CONCEPTS_PER_NODE, GRAPH_CONCURRENCY, REPORT_*, IMAGE_*
+  main.py            App, lifespan (create_all), access-key middleware, routers; imports services/report so the job registers
+  config.py          Settings from .env: ACCESS_KEY, VONK_*, CONCEPTS_PER_NODE, GRAPH_CONCURRENCY, REPORT_*, IMAGE_*
   database.py        Engine, SessionLocal, get_db, get_session_factory (for the streaming response)
   models.py          Graph (seeds, params, nodes, edges as JSON) and Report (sections as JSON)
   schemas.py         Node, Edge, IterationDelta, GraphOut, Section, ReportOut
   routers/
+    access.py        GET /api/session, POST /api/login (key → HttpOnly cookie), POST /api/logout
     graphs.py        GET /api/graphs/stream (SSE, saves at the end), list / get / delete (delete also
                      removes its reports, cancels its jobs and unlinks images no other report uses)
     reports.py       POST /api/graphs/{id}/reports (queues grow_report), GET reports, …/markdown,
                      GET /api/images?spec= and /api/images/{name}
     jobs.py          Template: list / get / cancel / retry jobs
   services/
+    access.py        The single access key: cookie token, header check, OPEN_PATHS
     ai.py            Shared AsyncVonk client (chat model + image model)
     graph.py         normalize, expand_concept (ai.json, never raises), expand_graph (async generator)
     report.py        outline() from the graph, prompts, text cleaning, the grow_report job
@@ -75,11 +77,14 @@ backend/app/
   worker.py          Template: `python -m app.worker`
 
 frontend/src/
-  App.jsx            State: graph stream, saved graphs, report + its job, highlight logic
+  main.jsx           Renders App inside KeyGate
+  App.jsx            State: graph stream, saved graphs, report + its job, highlight logic, panel widths
+  useResizable.js    Drag / arrow-key panel width, remembered in localStorage (double-click resets)
   api.js             All fetch/EventSource calls
   graph.js           normalize (mirror of the backend), pathToRoot, edge-key helpers
   markdown.js        markdown-it render; gen: tags → <figure> with /api/images?spec=
   components/
+    KeyGate.jsx      Asks for the access key; any later 401 ("kf-locked" event) asks again
     ConceptForm.jsx  Seeds, generations, max concepts, temperature
     GraphView.jsx    react-force-graph-2d with custom hit-testing (see constraints)
     ReportView.jsx   The growing report, progress bar, image placeholders, hover/pin sections
@@ -114,6 +119,22 @@ frontend/src/
 `source_node_ids` on each section drive the provenance highlight: hovering a section highlights
 those nodes in the graph; clicking a node scrolls to the section that grew from it.
 
+## Access key
+
+One shared key protects the whole site: `ACCESS_KEY` in `.env` (empty = no login, for local
+development only). A middleware in `main.py` answers 401 to every `/api/` route except
+`services/access.py::OPEN_PATHS` (health, session, login, logout). The browser posts the key
+to `/api/login` once and gets an HttpOnly cookie for a year holding an HMAC of the key, never
+the key itself; EventSource and `<img>` can't send headers, so the cookie is what authorises
+them. Scripts send the key itself as `X-Access-Key`:
+
+```bash
+curl -H "X-Access-Key: $ACCESS_KEY" https://knowledge-farm.paws.home/api/graphs
+```
+
+Changing the key logs every browser out. "Lock this browser" at the bottom of the sidebar
+drops the cookie.
+
 ## Production (feib.nl)
 
 Live at **https://knowledge-farm.feib.nl**: host `feib.nl` (ssh, user bpijls), checkout in
@@ -143,7 +164,8 @@ changed sites break; the symptom is `tlsv1 alert internal error`). The dev file 
 start without `API_DOMAIN`/`APP_DOMAIN`. To diagnose: `docker logs caddy-caddy-1 | grep
 'request error'`, then look for a container with `caddy.*` labels but an empty `caddy` label.
 
-**There is no login.** Anyone who finds the URL can grow graphs and reports on vonk.
+The site is closed by `ACCESS_KEY` (see above); without it set, anyone who finds the URL can grow
+graphs, delete them and spend vonk time.
 
 ## Key constraints
 

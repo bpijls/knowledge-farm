@@ -1,15 +1,17 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app import models  # noqa: F401 - registers the tables
 from app.config import settings
 from app.database import Base, engine
+from app.routers import access as access_router
 from app.routers import graphs, reports
 from app.routers import jobs as jobs_router
-from app.services import jobs
+from app.services import access, jobs
 from app.services import report as report_job  # noqa: F401 - registers the grow_report job
 
 
@@ -38,6 +40,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def require_access_key(request: Request, call_next):
+    """Every /api route except the login ones needs the access key (see services/access.py)."""
+    path = request.url.path
+    if (path.startswith("/api/") and path not in access.OPEN_PATHS
+            and request.method != "OPTIONS" and not access.authorised(request)):
+        return JSONResponse({"detail": "Access key required"}, status_code=401)
+    return await call_next(request)
+
+
+app.include_router(access_router.router)
 app.include_router(graphs.router)
 app.include_router(reports.router)
 app.include_router(jobs_router.router)

@@ -16,6 +16,7 @@ import { SavedGraphs } from "./components/SavedGraphs.jsx";
 import { inducedEdgeKeys, normalize, pathEdgeKeys, pathToRoot } from "./graph.js";
 import JobsPanel from "./JobsPanel.jsx";
 import { isBusy, useJobs } from "./useJobs.js";
+import { useResizable } from "./useResizable.js";
 
 const LANGUAGES = ["English", "Nederlands"];
 const EMPTY = { nodes: [], edges: [] };
@@ -39,7 +40,13 @@ function remember(key, value) {
   }
 }
 
-export default function App() {
+const sidebarMax = () => Math.max(260, window.innerWidth * 0.4);
+const reportMax = () => Math.max(340, window.innerWidth - 560);
+
+export default function App({ access = { canLock: false, lock: () => {} } }) {
+  // Panel widths: undefined until dragged, so the stylesheet's defaults apply.
+  const sidebar = useResizable("kf-sidebar-w", { min: 240, max: sidebarMax, sign: 1 });
+  const reportPanel = useResizable("kf-report-w", { min: 320, max: reportMax, sign: -1 });
   const [graphData, setGraphData] = useState(EMPTY);
   const [graphId, setGraphId] = useState(null);
   const [seedIds, setSeedIds] = useState(new Set());
@@ -232,7 +239,13 @@ export default function App() {
   }
 
   return (
-    <div className={`app${report ? " with-report" : ""}`}>
+    <div
+      className={`app${report ? " with-report" : ""}`}
+      style={{
+        ...(sidebar.width && { "--sidebar-w": `${sidebar.width}px` }),
+        ...(reportPanel.width && { "--report-w": `${reportPanel.width}px` }),
+      }}
+    >
       <aside className="sidebar">
         <h1 className="title">Knowledge<br />Farm</h1>
         <p className="subtitle">seed vault · concept cultivator</p>
@@ -289,7 +302,13 @@ export default function App() {
             <JobsPanel jobs={jobs} refresh={refreshJobs} />
           </details>
         )}
+        {access.canLock && (
+          <button type="button" className="link lock" onClick={access.lock}>
+            Lock this browser
+          </button>
+        )}
       </aside>
+      <div className="resizer" aria-label="Resize the sidebar" {...sidebar.handleProps} />
 
       <main className="main">
         {graphData.nodes.length === 0 && !loading ? (
@@ -307,6 +326,7 @@ export default function App() {
         )}
       </main>
 
+      {report && <div className="resizer" aria-label="Resize the report" {...reportPanel.handleProps} />}
       {report && (
         <ReportView
           report={report}

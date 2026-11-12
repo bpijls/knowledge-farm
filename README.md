@@ -16,7 +16,7 @@ that graph.
 ## Run
 
 ```bash
-./setup.sh                      # creates .env on first run; fill in VONK_KEY and DB_PASSWORD
+./setup.sh                      # creates .env on first run; fill in VONK_KEY, DB_PASSWORD and ACCESS_KEY
 docker compose up -d --build
 ```
 
