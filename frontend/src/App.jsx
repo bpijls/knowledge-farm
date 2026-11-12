@@ -9,7 +9,7 @@ import {
   listStyles,
   streamGraph,
 } from "./api.js";
-import { ConceptForm } from "./components/ConceptForm.jsx";
+import { ConceptForm, LANGUAGES } from "./components/ConceptForm.jsx";
 import { GraphView } from "./components/GraphView.jsx";
 import { ReportView } from "./components/ReportView.jsx";
 import { SavedGraphs } from "./components/SavedGraphs.jsx";
@@ -18,7 +18,6 @@ import JobsPanel from "./JobsPanel.jsx";
 import { isBusy, useJobs } from "./useJobs.js";
 import { useResizable } from "./useResizable.js";
 
-const LANGUAGES = ["English", "Nederlands"];
 const EMPTY = { nodes: [], edges: [] };
 
 // Until /api/report-styles answers, only the default is offered.
@@ -171,7 +170,7 @@ export default function App({ access = { canLock: false, lock: () => {} } }) {
     setError(null);
   }
 
-  function handleGenerate({ seeds, iterations, maxConcepts, temperature }) {
+  function handleGenerate({ seeds, iterations, maxConcepts, temperature, language: graphLanguage }) {
     resetView();
     setLoading(true);
     setStatus("Starting…");
@@ -182,7 +181,7 @@ export default function App({ access = { canLock: false, lock: () => {} } }) {
     const nodes = new Map();
     const edges = new Map();
     streamGraph(
-      { seeds, iterations, maxConcepts, temperature },
+      { seeds, iterations, maxConcepts, temperature, language: graphLanguage },
       {
         onDelta: (delta) => {
           for (const n of delta.nodes) nodes.set(n.id, n);
@@ -192,6 +191,7 @@ export default function App({ access = { canLock: false, lock: () => {} } }) {
         },
         onDone: (id) => {
           setLoading(false);
+          setLanguage(graphLanguage); // the report follows the graph's language unless changed
           setGraphId(id);
           setStatus(`Grown · ${nodes.size} concepts, ${edges.size} links`);
           refreshSaved();
@@ -212,6 +212,7 @@ export default function App({ access = { canLock: false, lock: () => {} } }) {
       setGraphId(graph.id);
       setSeedIds(new Set(graph.nodes.filter((n) => n.depth === 0).map((n) => n.id)));
       setGraphData({ nodes: graph.nodes, edges: graph.edges });
+      if (LANGUAGES.includes(graph.params?.language)) setLanguage(graph.params.language);
       setStatus(`Reopened · ${graph.nodes.length} concepts, ${graph.edges.length} links`);
       const reports = await listReports(graph.id);
       setVersions(reports);

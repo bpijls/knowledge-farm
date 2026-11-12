@@ -71,6 +71,7 @@ backend/app/
     access.py        The single access key: cookie token, header check, OPEN_PATHS
     ai.py            Shared AsyncVonk client (chat model + image model)
     graph.py         normalize, expand_concept (ai.json, never raises), expand_graph (async generator)
+    language.py      Language (English | Nederlands), model_language, is_english: shared by graph and report
     report.py        outline() from the graph, prompts, text cleaning, the grow_report job
     images.py        gen: tags → PNGs: parse_spec, sha1 cache key, generate(); ported from my-vault
     jobs.py          Template job queue (do not hand-roll another)
@@ -85,12 +86,20 @@ frontend/src/
   markdown.js        markdown-it render; gen: tags → <figure> with /api/images?spec=
   components/
     KeyGate.jsx      Asks for the access key; any later 401 ("kf-locked" event) asks again
-    ConceptForm.jsx  Seeds, generations, max concepts, temperature
+    ConceptForm.jsx  Seeds, concept language, generations, max concepts, temperature
     GraphView.jsx    react-force-graph-2d with custom hit-testing (see constraints)
     ReportView.jsx   The growing report, progress bar, image placeholders, hover/pin sections
     SavedGraphs.jsx  Reopen earlier graphs (and their latest report); × deletes one after a confirm
   useJobs.js / JobsPanel.jsx   Template job polling and panel (collapsed under "Jobs")
 ```
+
+## Graph language
+
+`GET /api/graphs/stream?language=English|Nederlands` (anything else is a 422). The system
+prompt in `services/graph.py` asks for every concept in that language, with an example in the
+same language because small models copy the example's language. The choice is saved in the
+graph's `params.language`; reopening a graph sets the report language to match. Expect some
+English jargon in Dutch graphs ("supervised learning"): that is how Dutch IT people talk too.
 
 ## The report pipeline
 
@@ -112,7 +121,7 @@ frontend/src/
    (`style` column, added by an `ALTER TABLE … IF NOT EXISTS` in `main.py`'s lifespan, since
    `create_all` never alters a table); the frontend styles the report per style
    (`.report-style-*`) and lists a graph's earlier reports in a version picker.
-6. Language: the UI sends `English` or `Nederlands`; `model_language` maps the latter to
+6. Language: the UI sends `English` or `Nederlands` (a report defaults to its graph's language); `model_language` maps the latter to
    "Dutch (Nederlands)". Every prompt ends with "write every sentence in …", and `write_text`
    retries once if the answer `looks_english` anyway (local models drift).
 

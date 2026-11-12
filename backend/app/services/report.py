@@ -18,6 +18,7 @@ from app.models import Graph, Report
 from app.services import images
 from app.services.ai import ai
 from app.services.jobs import JobContext, job, run_all
+from app.services.language import is_english, model_language
 
 log = logging.getLogger(__name__)
 
@@ -161,13 +162,6 @@ def get_style(key: str | None) -> Style:
 
 
 # What the model is told for a UI language name; local models follow "Dutch" more reliably.
-_MODEL_LANGUAGE = {"nederlands": "Dutch (Nederlands)", "dutch": "Dutch (Nederlands)"}
-
-
-def model_language(language: str) -> str:
-    return _MODEL_LANGUAGE.get(language.strip().lower(), language.strip())
-
-
 def _system(language: str, style: Style) -> str:
     return SYSTEM.format(language=language, voice=style.voice)
 
@@ -175,10 +169,6 @@ def _system(language: str, style: Style) -> str:
 def _closing(language: str) -> str:
     """Repeated at the end of every prompt: small models drift back to English otherwise."""
     return f" Write every sentence in {language}; only the image prompt stays in English."
-
-
-def is_english(language: str) -> bool:
-    return language.strip().lower().startswith("english")
 
 
 _ENGLISH_MARKERS = {"the", "and", "of", "to", "that", "with", "which", "its", "this", "are"}

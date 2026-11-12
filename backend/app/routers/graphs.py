@@ -12,6 +12,7 @@ from app.schemas import GraphOut, GraphSummary
 from app.services import images, jobs
 from app.services.graph import expand_graph
 from app.services.jobs import Job
+from app.services.language import Language
 from app.services.report import repair_image_tags
 
 router = APIRouter(prefix="/api/graphs", tags=["graphs"])
@@ -23,6 +24,7 @@ async def stream_graph(
     iterations: int = Query(default=2, ge=1, le=10),
     max_concepts: int = Query(default=500, ge=1, le=2000),
     temperature: float = Query(default=0.7, ge=0.0, le=2.0),
+    language: Language = "English",
     factory=Depends(get_session_factory),
 ):
     """Server-sent events: one IterationDelta per iteration, then {"done", "graph_id"}.
@@ -36,13 +38,13 @@ async def stream_graph(
 
     async def events():
         nodes, edges = [], []
-        async for delta in expand_graph(seed_list, iterations, max_concepts, temperature):
+        async for delta in expand_graph(seed_list, iterations, max_concepts, temperature, language):
             nodes += [n.model_dump() for n in delta.nodes]
             edges += [e.model_dump() for e in delta.edges]
             yield f"data: {delta.model_dump_json()}\n\n"
         graph = Graph(seeds=seed_list, nodes=nodes, edges=edges,
                       params={"iterations": iterations, "max_concepts": max_concepts,
-                              "temperature": temperature})
+                              "temperature": temperature, "language": language})
         async with factory() as db:
             db.add(graph)
             await db.commit()

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.jsx";
 
@@ -90,4 +90,21 @@ test("deleting the open graph asks first, then clears it", async () => {
   });
   await waitFor(() => expect(screen.queryByRole("heading", { name: "Rain" })).toBeNull());
   expect(confirm).toHaveBeenCalledTimes(2);
+});
+
+test("the graph is grown in the chosen language, and the report follows it", async () => {
+  const sources = [];
+  globalThis.EventSource = class {
+    constructor(url) {
+      sources.push(this);
+      this.url = url;
+    }
+    close() {}
+  };
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("Concepts in"), { target: { value: "Nederlands" } });
+  fireEvent.click(screen.getByRole("button", { name: "Plant" }));
+  expect(new URL(sources[0].url, "http://x").searchParams.get("language")).toBe("Nederlands");
+  act(() => sources[0].onmessage({ data: JSON.stringify({ done: true, graph_id: "g1" }) }));
+  expect((await screen.findByRole("combobox", { name: "Report language" })).value).toBe("Nederlands");
 });

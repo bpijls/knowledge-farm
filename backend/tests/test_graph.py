@@ -13,8 +13,10 @@ TREE = {
 
 
 def fake_expand(mapping):
-    async def expand(concept, temperature=0.7):
+    async def expand(concept, temperature=0.7, language="English"):
+        expand.languages.add(language)
         return mapping.get(normalize(concept), [])
+    expand.languages = set()
     return expand
 
 
@@ -85,3 +87,29 @@ async def test_stream_sends_deltas_then_saves(client, monkeypatch):
 
 async def test_stream_needs_a_seed(client):
     assert (await client.get("/api/graphs/stream", params={"seeds": " , "})).status_code == 422
+
+
+async def test_concepts_are_asked_for_in_the_chosen_language(monkeypatch):
+    seen = []
+
+    class Fake:
+        async def json(self, prompt, *, system, **k):
+            seen.append(system)
+            return {"concepts": ["regen"]}
+
+    monkeypatch.setattr(graph_service, "ai", Fake())
+    assert await graph_service.expand_concept("water", language="Nederlands") == ["regen"]
+    assert "Name every concept in Dutch (Nederlands)" in seen[0] and "neuraal netwerk" in seen[0]
+    await graph_service.expand_concept("water")
+    assert "Name every concept in English" in seen[1] and "neural network" in seen[1]
+
+
+async def test_stream_grows_and_saves_in_the_chosen_language(client, monkeypatch):
+    fake = fake_expand(TREE)
+    monkeypatch.setattr(graph_service, "expand_concept", fake)
+    res = await client.get("/api/graphs/stream", params={"seeds": "water", "language": "Nederlands"})
+    done = json.loads([line for line in res.text.splitlines() if line.startswith("data:")][-1][5:])
+    graph = (await client.get(f"/api/graphs/{done['graph_id']}")).json()
+    assert graph["params"]["language"] == "Nederlands" and fake.languages == {"Nederlands"}
+    bad = await client.get("/api/graphs/stream", params={"seeds": "water", "language": "Klingon"})
+    assert bad.status_code == 422

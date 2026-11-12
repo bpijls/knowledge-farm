@@ -100,7 +100,8 @@ body {
 }
 
 .field textarea,
-.field input[type="number"] {
+.field input[type="number"],
+.field select {
   background: var(--well);
   border: 1px solid var(--rule);
   border-radius: 4px;
@@ -118,7 +119,8 @@ body {
 }
 
 .field textarea:focus,
-.field input[type="number"]:focus {
+.field input[type="number"]:focus,
+.field select:focus {
   border-color: var(--sky);
   box-shadow: 0 0 0 3px rgba(46, 127, 176, 0.15);
 }

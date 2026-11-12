@@ -20,12 +20,13 @@ export const login = (key) => request("/login", { method: "POST", body: JSON.str
 export const logout = () => request("/logout", { method: "POST" });
 
 // Graphs. Growing one streams over SSE: one message per iteration, then {done, graph_id}.
-export function streamGraph({ seeds, iterations, maxConcepts, temperature }, { onDelta, onDone, onError }) {
+export function streamGraph({ seeds, iterations, maxConcepts, temperature, language }, { onDelta, onDone, onError }) {
   const params = new URLSearchParams({
     seeds: seeds.join(","),
     iterations: String(iterations),
     max_concepts: String(maxConcepts),
     temperature: String(temperature),
+    language: language ?? "English",
   });
   const es = new EventSource(`${BASE}/api/graphs/stream?${params}`);
   es.onmessage = (e) => {

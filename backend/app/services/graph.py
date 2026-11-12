@@ -12,6 +12,7 @@ from collections.abc import AsyncGenerator
 from app.config import settings
 from app.schemas import Edge, IterationDelta, Node
 from app.services.ai import ai
+from app.services.language import model_language
 
 log = logging.getLogger(__name__)
 
@@ -19,20 +20,31 @@ SYSTEM_PROMPT = (
     "You are a knowledge graph assistant. "
     "When given a concept, return exactly a JSON object with a single key 'concepts' "
     "containing a list of up to {n} closely related concepts. "
+    "Name every concept in {language}, even when the given concept is in another language. "
     "No prose, no markdown, no code fences — raw JSON only. "
-    'Example: {{"concepts": ["neural network", "gradient descent", "backpropagation"]}}'
+    "Example: {example}"
 )
+# The example is in the target language too: small models copy its language.
+_EXAMPLES = {
+    "English": '{"concepts": ["neural network", "gradient descent", "backpropagation"]}',
+    "Nederlands": '{"concepts": ["neuraal netwerk", "gradiëntafdaling", "terugpropagatie"]}',
+}
 
 
 def normalize(concept: str) -> str:
     return re.sub(r"\s+", " ", concept.strip().lower())
 
 
-async def expand_concept(concept: str, temperature: float = 0.7) -> list[str]:
+def system_prompt(language: str = "English") -> str:
+    return SYSTEM_PROMPT.format(n=settings.concepts_per_node, language=model_language(language),
+                                example=_EXAMPLES.get(language, _EXAMPLES["English"]))
+
+
+async def expand_concept(concept: str, temperature: float = 0.7, language: str = "English") -> list[str]:
     """Up to CONCEPTS_PER_NODE related concepts. Never raises: a bad call yields []."""
     n = settings.concepts_per_node
     try:
-        data = await ai.json(f"Concept: {concept}", system=SYSTEM_PROMPT.format(n=n),
+        data = await ai.json(f"Concept: {concept}", system=system_prompt(language),
                              temperature=temperature, max_tokens=300)
     except Exception as exc:  # noqa: BLE001 - one bad call never ends a graph
         log.warning("expanding %r failed: %s", concept, exc)
@@ -46,6 +58,7 @@ async def expand_concept(concept: str, temperature: float = 0.7) -> list[str]:
 
 async def expand_graph(
     seeds: list[str], iterations: int, max_concepts: int, temperature: float = 0.7,
+    language: str = "English",
 ) -> AsyncGenerator[IterationDelta, None]:
     """Yield one IterationDelta per iteration as nodes and edges are discovered."""
     nodes: dict[str, Node] = {}
@@ -69,7 +82,7 @@ async def expand_graph(
 
         async def expand_one(key: str) -> tuple[str, list[str]]:
             async with sem:
-                return key, await expand_concept(nodes[key].label, temperature)
+                return key, await expand_concept(nodes[key].label, temperature, language)
 
         results = await asyncio.gather(*(expand_one(k) for k in current))
 
