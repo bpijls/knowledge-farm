@@ -134,6 +134,14 @@ It also uses `VONK_IMAGE_MODEL=image`: the vonk key on feib.nl may only use `tex
 A changed `.env` needs `up -d --force-recreate`. A rollout restarts the worker, which fails a
 running report job; it can be grown again.
 
+**Always pass `-f docker-compose.prod.yml` on feib.nl.** The server's `.env` has no
+`API_DOMAIN`; under the dev `docker-compose.yml` the API would get an empty `caddy` label, its
+`reverse_proxy` would land in Caddy's global block, and caddy-docker-proxy would reject every
+reload for *all* sites on the host (Caddy keeps serving its last good config, so only new or
+changed sites break; the symptom is `tlsv1 alert internal error`). The dev file now refuses to
+start without `API_DOMAIN`/`APP_DOMAIN`. To diagnose: `docker logs caddy-caddy-1 | grep
+'request error'`, then look for a container with `caddy.*` labels but an empty `caddy` label.
+
 **There is no login.** Anyone who finds the URL can grow graphs and reports on vonk.
 
 ## Key constraints
