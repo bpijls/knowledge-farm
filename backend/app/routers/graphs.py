@@ -7,9 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_session_factory
-from app.models import Graph
+from app.models import Graph, Report
 from app.schemas import GraphOut, GraphSummary
+from app.services import images, jobs
 from app.services.graph import expand_graph
+from app.services.jobs import Job
+from app.services.report import repair_image_tags
 
 router = APIRouter(prefix="/api/graphs", tags=["graphs"])
 
@@ -65,7 +68,30 @@ async def get_graph(graph_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.delete("/{graph_id}", status_code=204)
 async def delete_graph(graph_id: str, db: AsyncSession = Depends(get_db)):
+    """The graph, its reports, its report jobs and the images no other report still uses."""
     graph = await db.get(Graph, graph_id)
-    if graph is not None:
-        await db.delete(graph)
-        await db.commit()
+    if graph is None:
+        raise HTTPException(404, "Graph not found")
+    # A report still growing is cancelled first; it stops at its next gate.
+    for job in (await db.scalars(select(Job).where(Job.subject == f"graph:{graph_id}"))).all():
+        if job.status in jobs.ACTIVE:
+            job.status, job.progress = "cancelled", ""
+    reports = (await db.scalars(select(Report).where(Report.graph_id == graph_id))).all()
+    doomed = {s for r in reports for s in _report_specs(r)}
+    for r in reports:
+        await db.delete(r)
+    await db.delete(graph)
+    await db.commit()
+
+    kept = {s for r in (await db.scalars(select(Report))).all() for s in _report_specs(r)}
+    for spec in doomed - kept:
+        try:
+            png = images.cached_path(spec)
+        except images.ImageError:
+            continue
+        png.unlink(missing_ok=True)
+        png.with_suffix(".json").unlink(missing_ok=True)
+
+
+def _report_specs(report: Report) -> set[str]:
+    return {spec for s in report.sections or [] for spec in images.gen_specs(repair_image_tags(s.get("markdown", "")))}

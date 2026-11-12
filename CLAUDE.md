@@ -61,7 +61,8 @@ backend/app/
   models.py          Graph (seeds, params, nodes, edges as JSON) and Report (sections as JSON)
   schemas.py         Node, Edge, IterationDelta, GraphOut, Section, ReportOut
   routers/
-    graphs.py        GET /api/graphs/stream (SSE, saves at the end), list / get / delete
+    graphs.py        GET /api/graphs/stream (SSE, saves at the end), list / get / delete (delete also
+                     removes its reports, cancels its jobs and unlinks images no other report uses)
     reports.py       POST /api/graphs/{id}/reports (queues grow_report), GET reports, …/markdown,
                      GET /api/images?spec= and /api/images/{name}
     jobs.py          Template: list / get / cancel / retry jobs
@@ -82,7 +83,7 @@ frontend/src/
     ConceptForm.jsx  Seeds, generations, max concepts, temperature
     GraphView.jsx    react-force-graph-2d with custom hit-testing (see constraints)
     ReportView.jsx   The growing report, progress bar, image placeholders, hover/pin sections
-    SavedGraphs.jsx  Reopen earlier graphs (and their latest report)
+    SavedGraphs.jsx  Reopen earlier graphs (and their latest report); × deletes one after a confirm
   useJobs.js / JobsPanel.jsx   Template job polling and panel (collapsed under "Jobs")
 ```
 

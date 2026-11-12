@@ -232,3 +232,35 @@ async def test_unknown_style_is_rejected_and_styles_are_listed(client, factory):
     assert (await client.post(f"/api/graphs/{g.id}/reports", json={"style": "limerick"})).status_code == 422
     styles = (await client.get("/api/report-styles")).json()
     assert [s["key"] for s in styles] == ["prose", "business", "poetic", "flyer"]
+
+
+async def test_deleting_a_graph_removes_its_reports_jobs_and_unshared_images(
+        client, factory, monkeypatch, image_dir):
+    fake = FakeAI()
+    monkeypatch.setattr(report_service, "ai", fake)
+    monkeypatch.setattr(images, "ai", fake)
+    monkeypatch.setattr(report_service.settings, "report_max_sections", 3)
+    graph_id, report_id, job_id = await _start(client, factory)
+    await jobs.run_job(job_id, factory)
+    # A second graph whose report shares one image: that file must survive.
+    async with factory() as db:
+        other = Graph(seeds=["ice"], nodes=NODES, edges=EDGES, params={})
+        db.add(other)
+        await db.flush()
+        db.add(Report(graph_id=other.id, title="ice", status="done", sections=[
+            {"key": "intro", "title": "", "markdown": "![ice](gen: a picture of ice)",
+             "source_node_ids": []}]))
+        queued = Job(kind="grow_report", subject=f"graph:{graph_id}", status="queued")
+        db.add(queued)
+        await db.commit()
+        queued_id = queued.id
+    assert len(list(image_dir.glob("*.png"))) == 4
+
+    assert (await client.delete(f"/api/graphs/{graph_id}")).status_code == 204
+    assert (await client.get(f"/api/graphs/{graph_id}")).status_code == 404
+    assert (await client.get(f"/api/reports/{report_id}")).status_code == 404
+    assert [p.name for p in image_dir.glob("*.png")] == [images.file_name("a picture of ice")]
+    assert not list(image_dir.glob("*rain*.json"))
+    async with factory() as db:
+        assert (await db.get(Job, queued_id)).status == "cancelled"
+    assert (await client.delete(f"/api/graphs/{graph_id}")).status_code == 404

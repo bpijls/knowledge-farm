@@ -4,6 +4,7 @@ import {
   getReport,
   growReport,
   listGraphs,
+  deleteGraph,
   listReports,
   listStyles,
   streamGraph,
@@ -213,6 +214,23 @@ export default function App() {
     }
   }
 
+  async function removeGraph(g) {
+    const name = g.seeds.join(", ");
+    if (!window.confirm(`Delete "${name}" and all its reports? This cannot be undone.`)) return;
+    try {
+      await deleteGraph(g.id);
+      if (g.id === graphId) {
+        resetView();
+        setGraphId(null);
+        setGraphData(EMPTY);
+        setStatus("");
+      }
+      refreshSaved();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   return (
     <div className={`app${report ? " with-report" : ""}`}>
       <aside className="sidebar">
@@ -264,7 +282,7 @@ export default function App() {
           </div>
         )}
 
-        <SavedGraphs graphs={saved} currentId={graphId} onOpen={openGraph} />
+        <SavedGraphs graphs={saved} currentId={graphId} onOpen={openGraph} onDelete={removeGraph} />
         {jobs.length > 0 && (
           <details className="saved">
             <summary>Jobs</summary>

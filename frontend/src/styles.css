@@ -446,6 +446,20 @@ body {
   gap: 8px;
 }
 
+.saved-delete {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #9aa589;
+  opacity: 0.5;
+}
+.saved li:hover .saved-delete,
+.saved-delete:focus-visible { opacity: 1; }
+.saved-delete:hover { color: #b3412e; }
+
 .saved li.current .link { font-weight: 600; color: var(--ink); }
 
 .saved-meta {

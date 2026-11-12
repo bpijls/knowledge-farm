@@ -72,3 +72,22 @@ test("the chosen style is sent with a new report", async () => {
     expect(JSON.parse(post[1].body)).toEqual({ language: "English", style: "flyer" });
   });
 });
+
+test("deleting the open graph asks first, then clears it", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "water" }));
+  await screen.findByRole("heading", { name: "Rain" });
+  const del = screen.getByRole("button", { name: "Delete water" });
+
+  fireEvent.click(del);
+  expect(fetch.mock.calls.some(([, o]) => o?.method === "DELETE")).toBe(false);
+
+  fireEvent.click(del);
+  await waitFor(() => {
+    const call = fetch.mock.calls.find(([, o]) => o?.method === "DELETE");
+    expect(String(call[0])).toMatch(/\/api\/graphs\/g1$/);
+  });
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "Rain" })).toBeNull());
+  expect(confirm).toHaveBeenCalledTimes(2);
+});
